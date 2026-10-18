@@ -46,11 +46,17 @@ def _run_headless_diagnostic_showcase() -> int:
         )
         print(f"Final Task Outcome   : {task.final_outcome.value}")
 
+        print("\n=== LIVE SELF-TEST: AST SYMBOL SEARCH & WORKSPACE SNAPSHOT/DIFF ===")
+        cli_main(["--workspace", str(ws), "search", "calculate_total", "--mode", "symbol"])
+        cli_main(["--workspace", str(ws), "snapshot", "create", "--id", "snap-baseline", "--label", "Initial build"])
+
     print("\n=== CLI QUICK REFERENCE (Windows PowerShell / CMD / Terminal) ===")
     print("  python main.py console                           # Launch interactive terminal console")
     print("  python -m agent911 doctor                        # Run Windows & system readiness check")
     print("  python -m agent911 status                        # Show config, model & SQLite status")
     print("  python -m agent911 run \"<instruction>\"           # Execute a task with Verification & Live Testing")
+    print("  python -m agent911 search \"<query>\" [--mode symbol] # Search workspace text/regex or Python AST symbols")
+    print("  python -m agent911 snapshot [create|list|diff|restore] # Manage workspace checkpoints & unified diffs")
     print("  python -m agent911 distill \"<messy text>\"        # Distill informal writing into concrete build spec")
     print("  python -m agent911 capabilities                  # List registered & custom-grown capabilities")
     print("  python -m agent911 proposals --detect            # Detect self-improvement proposals from history")

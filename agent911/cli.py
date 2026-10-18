@@ -272,6 +272,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     diag_parser.add_argument("task_id", help="Task ID to diagnose")
 
+    # search
+    search_parser = subparsers.add_parser(
+        "search",
+        help="Search workspace files by text/regex pattern or Python AST symbol (functions, classes, methods)",
+    )
+    search_parser.add_argument("query", help="Search pattern or Python symbol name")
+    search_parser.add_argument(
+        "--mode",
+        choices=["pattern", "symbol"],
+        default="pattern",
+        help="Search mode: 'pattern' (text/regex) or 'symbol' (Python AST definitions)",
+    )
+    search_parser.add_argument("--glob", default="*", help="Filename glob filter (e.g. '*.py')")
+    search_parser.add_argument("--regex", action="store_true", help="Treat query as regular expression")
+    search_parser.add_argument("--case-sensitive", action="store_true", help="Case-sensitive search")
+
+    # snapshot
+    snap_parser = subparsers.add_parser(
+        "snapshot",
+        help="Create, list, diff, or restore workspace checkpoints (.agent911/snapshots)",
+    )
+    snap_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["create", "list", "diff", "restore"],
+        default="list",
+        help="Snapshot action: 'create', 'list', 'diff', or 'restore' (default 'list')",
+    )
+    snap_parser.add_argument("--id", dest="snapshot_id", default=None, help="Snapshot ID for diff/restore/create")
+    snap_parser.add_argument("--label", default="Workspace checkpoint", help="Human-readable label for create")
+    snap_parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Remove files created after the snapshot when restoring",
+    )
+
     return parser
 
 
@@ -431,8 +467,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print("=== Agent 911 Interactive Terminal Console ===")
         print("Type any natural-language instruction or chat message, or use slash commands:")
-        print("  /help, /status, /caps, /tasks, /inspect <id>, /memory [q], /experiences [q],")
-        print("  /models, /providers, /distill <text>, /proposals, /improve <id>, /exit")
+        print("  /help, /status, /doctor, /caps, /search <q>, /snapshot [action], /tasks,")
+        print("  /inspect <id>, /memory [q], /experiences [q], /models, /providers,")
+        print("  /distill <text>, /proposals, /improve <id>, /exit")
         while True:
             try:
                 user_msg = input("\nAgent911 > ").strip()
@@ -448,7 +485,10 @@ def main(argv: list[str] | None = None) -> int:
             if low_msg == "/help":
                 print("Console Commands:")
                 print("  /status              - Show workspace, model connectivity, and SQLite counts")
+                print("  /doctor              - Run system & Windows readiness diagnostics")
                 print("  /caps                - List registered capabilities and availability")
+                print("  /search <query>      - Search workspace code or Python AST symbols")
+                print("  /snapshot [action]   - Create, list, diff, or restore workspace checkpoints")
                 print("  /tasks               - List recent tasks in SQLite")
                 print("  /inspect <task_id>   - Show detailed task execution report")
                 print("  /memory [query]      - List or search persistent memories")
@@ -463,8 +503,23 @@ def main(argv: list[str] | None = None) -> int:
             if low_msg == "/status":
                 main(["--workspace", str(config.workspace_path), "status"])
                 continue
+            if low_msg == "/doctor":
+                main(["--workspace", str(config.workspace_path), "doctor"])
+                continue
             if low_msg in ("/caps", "/capabilities"):
                 main(["--workspace", str(config.workspace_path), "capabilities"])
+                continue
+            if low_msg.startswith("/search "):
+                sq = user_msg.split(None, 1)[1].strip()
+                main(["--workspace", str(config.workspace_path), "search", sq])
+                continue
+            if low_msg.startswith("/snapshot"):
+                parts = user_msg.split()
+                act = parts[1] if len(parts) > 1 else "list"
+                cmd_args = ["--workspace", str(config.workspace_path), "snapshot", act]
+                if len(parts) > 2:
+                    cmd_args.extend(["--id", parts[2]])
+                main(cmd_args)
                 continue
             if low_msg == "/tasks":
                 main(["--workspace", str(config.workspace_path), "tasks"])
@@ -871,6 +926,89 @@ def main(argv: list[str] | None = None) -> int:
         except KeyError as exc:
             print(json.dumps({"error": str(exc)}, indent=2) if args.json else f"Error: {exc}", file=sys.stderr)
             return 1
+
+    if cmd == "search":
+        from agent911.capabilities.base import CapabilityContext
+
+        ctx = CapabilityContext(
+            config=config,
+            memory_store=orchestrator.memory_store,
+            registry=orchestrator.registry,
+            model_interface=orchestrator.model_interface,
+        )
+        res = orchestrator.registry.invoke(
+            "code.search",
+            {
+                "query": args.query,
+                "mode": args.mode,
+                "file_glob": args.glob,
+                "is_regex": args.regex,
+                "case_sensitive": args.case_sensitive,
+            },
+            ctx,
+        )
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        else:
+            if not res.success:
+                print(f"Search error: {res.error}", file=sys.stderr)
+                return 1
+            data = res.data
+            print(
+                f"=== WORKSPACE SEARCH ({data['mode'].upper()}) — {data['match_count']} match(es) "
+                f"across {data['files_searched']} file(s) ==="
+            )
+            for m in data["matches"]:
+                if data["mode"] == "symbol":
+                    params_sig = f"({', '.join(m.get('parameters', []))})" if m["kind"] != "class" else ""
+                    print(f"  - {m['file']}:{m['line_number']} [{m['kind']}] {m['symbol']}{params_sig}")
+                else:
+                    print(f"  - {m['file']}:{m['line_number']}: {m['line']}")
+        return 0 if res.success else 1
+
+    if cmd == "snapshot":
+        from agent911.capabilities.base import CapabilityContext
+
+        ctx = CapabilityContext(
+            config=config,
+            memory_store=orchestrator.memory_store,
+            registry=orchestrator.registry,
+            model_interface=orchestrator.model_interface,
+        )
+        snap_params: dict[str, Any] = {
+            "action": args.action,
+            "label": args.label,
+            "clean_untracked": args.clean,
+        }
+        if args.snapshot_id:
+            snap_params["snapshot_id"] = args.snapshot_id
+        res = orchestrator.registry.invoke("workspace.snapshot", snap_params, ctx)
+        if args.json:
+            print(json.dumps(res.to_dict(), indent=2))
+        else:
+            if not res.success:
+                print(f"Snapshot error: {res.error}", file=sys.stderr)
+                return 1
+            data = res.data
+            print(f"=== WORKSPACE SNAPSHOT ({data['action'].upper()}) ===")
+            if data["action"] == "create":
+                print(f"Snapshot ID : {data['snapshot_id']}")
+                print(f"Label       : {data['label']}")
+                print(f"Files Saved : {data['file_count']}")
+            elif data["action"] == "list":
+                for s in data["snapshots"]:
+                    print(f"  - {s['snapshot_id']} ({s['file_count']} files) | {s['created_at']} | {s['label']}")
+            elif data["action"] == "diff":
+                print(f"Snapshot ID : {data['snapshot_id']}")
+                print(f"Modified    : {data['modified']}")
+                print(f"Added       : {data['added']}")
+                print(f"Deleted     : {data['deleted']}")
+                for rel_p, diff_txt in data.get("unified_diffs", {}).items():
+                    print(f"\n--- Diff: {rel_p} ---\n{diff_txt.rstrip()}")
+            elif data["action"] == "restore":
+                print(f"Snapshot ID    : {data['snapshot_id']}")
+                print(f"Files Restored : {data['restored_count']}")
+        return 0 if res.success else 1
 
     return 0
 

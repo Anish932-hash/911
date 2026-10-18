@@ -136,6 +136,110 @@ class TestWindowsAndCliHardening(unittest.TestCase):
         self.assertEqual(rc_status, 0)
         self.assertIn("=== AGENT 911 STATUS ===", buf_status.getvalue())
 
+    def test_06_code_search_pattern_and_ast_symbol_modes(self) -> None:
+        """Verify code.search finds text/regex matches and Python AST symbols with line numbers."""
+        src_dir = self.ws / "services"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        (src_dir / "invoice.py").write_text(
+            '"""Invoice calculation module."""\n\n'
+            "class InvoiceEngine:\n"
+            "    pass\n\n"
+            "def compute_invoice_tax(amount: float, rate: float = 0.18) -> float:\n"
+            '    """Calculate tax for an invoice."""\n'
+            "    return round(amount * rate, 2)\n",
+            encoding="utf-8",
+        )
+
+        # 1. Pattern search
+        pat_res = self.orch.registry.invoke(
+            "code.search",
+            {"query": "round(amount * rate", "mode": "pattern", "file_glob": "*.py"},
+            self.ctx,
+        )
+        self.assertTrue(pat_res.success)
+        self.assertEqual(pat_res.data["match_count"], 1)
+        self.assertEqual(pat_res.data["matches"][0]["file"], "services/invoice.py")
+        self.assertEqual(pat_res.data["matches"][0]["line_number"], 8)
+
+        # 2. AST symbol search
+        sym_res = self.orch.registry.invoke(
+            "code.search",
+            {"query": "compute_invoice_tax", "mode": "symbol"},
+            self.ctx,
+        )
+        self.assertTrue(sym_res.success)
+        self.assertEqual(sym_res.data["match_count"], 1)
+        match = sym_res.data["matches"][0]
+        self.assertEqual(match["file"], "services/invoice.py")
+        self.assertEqual(match["symbol"], "compute_invoice_tax")
+        self.assertEqual(match["kind"], "function")
+        self.assertEqual(match["parameters"], ["amount", "rate"])
+
+        # 3. Natural language task execution via TaskPlanner
+        task = self.orch.execute_task("Find symbol 'InvoiceEngine'")
+        self.assertEqual(task.final_outcome, TaskOutcome.SUCCESS)
+
+    def test_07_workspace_snapshot_create_diff_and_restore(self) -> None:
+        """Verify workspace.snapshot creates checkpoints, computes unified diffs, and restores files."""
+        app_file = self.ws / "config_state.py"
+        app_file.write_text("VERSION = 1\nMODE = 'stable'\n", encoding="utf-8")
+
+        # 1. Create snapshot
+        create_res = self.orch.registry.invoke(
+            "workspace.snapshot",
+            {"action": "create", "snapshot_id": "snap-v1", "label": "Version 1"},
+            self.ctx,
+        )
+        self.assertTrue(create_res.success)
+        self.assertEqual(create_res.data["snapshot_id"], "snap-v1")
+        self.assertIn("config_state.py", create_res.data["files"])
+
+        # 2. Modify file and add an untracked file
+        app_file.write_text("VERSION = 2\nMODE = 'experimental'\n", encoding="utf-8")
+        extra_file = self.ws / "temp_scratch.txt"
+        extra_file.write_text("temporary data\n", encoding="utf-8")
+
+        # 3. Diff against snapshot
+        diff_res = self.orch.registry.invoke(
+            "workspace.snapshot",
+            {"action": "diff", "snapshot_id": "snap-v1"},
+            self.ctx,
+        )
+        self.assertTrue(diff_res.success)
+        self.assertTrue(diff_res.data["has_changes"])
+        self.assertIn("config_state.py", diff_res.data["modified"])
+        self.assertIn("temp_scratch.txt", diff_res.data["added"])
+        self.assertIn("-VERSION = 1", diff_res.data["unified_diffs"]["config_state.py"])
+        self.assertIn("+VERSION = 2", diff_res.data["unified_diffs"]["config_state.py"])
+
+        # 4. Restore snapshot with clean_untracked=True
+        restore_res = self.orch.registry.invoke(
+            "workspace.snapshot",
+            {"action": "restore", "snapshot_id": "snap-v1", "clean_untracked": True},
+            self.ctx,
+        )
+        self.assertTrue(restore_res.success)
+        self.assertEqual(app_file.read_text(encoding="utf-8"), "VERSION = 1\nMODE = 'stable'\n")
+        self.assertFalse(extra_file.exists())
+
+    def test_08_safe_file_deletion_and_boundary_protection(self) -> None:
+        """Verify fs.delete removes target workspace files and blocks deleting .agent911 or outside workspace."""
+        target = self.ws / "obsolete.txt"
+        target.write_text("remove me", encoding="utf-8")
+
+        del_res = self.orch.registry.invoke("fs.delete", {"path": "obsolete.txt"}, self.ctx)
+        self.assertTrue(del_res.success)
+        self.assertFalse(target.exists())
+        self.assertEqual(del_res.data["deleted_path"], "obsolete.txt")
+
+        # Refuse deleting internal .agent911 state
+        internal_res = self.orch.registry.invoke(
+            "fs.delete", {"path": ".agent911/agent911.db"}, self.ctx
+        )
+        self.assertFalse(internal_res.success)
+        self.assertEqual(internal_res.error_type, "PermissionError")
+
 
 if __name__ == "__main__":
     unittest.main()
+

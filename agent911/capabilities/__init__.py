@@ -44,6 +44,11 @@ from agent911.capabilities.registry import (
 )
 from agent911.capabilities.test_execution import RunTestsCapability
 from agent911.capabilities.web_research import WebSearchCapability
+from agent911.capabilities.workspace_ops import (
+    DeleteFileCapability,
+    SearchWorkspaceCapability,
+    WorkspaceSnapshotCapability,
+)
 from agent911.memory import PersistentMemoryStore
 
 
@@ -57,9 +62,12 @@ def register_builtin_capabilities(
         ReadFileCapability(),
         WriteFileCapability(),
         UpdateFileCapability(),
+        DeleteFileCapability(),
         MakeDirectoryCapability(),
         StatFileCapability(),
         InspectProjectCapability(),
+        SearchWorkspaceCapability(),
+        WorkspaceSnapshotCapability(),
         RunCommandCapability(),
         RunTestsCapability(),
         StoreMemoryCapability(),
@@ -102,6 +110,7 @@ __all__ = [
     "CapabilityRegistrationError",
     "CapabilityRegistry",
     "CheckModelConnectivityCapability",
+    "DeleteFileCapability",
     "DevelopCapability",
     "DevelopSkillCapability",
     "DiscoverCapabilitiesCapability",
@@ -115,13 +124,16 @@ __all__ = [
     "RetrieveMemoryCapability",
     "RunCommandCapability",
     "RunTestsCapability",
+    "SearchWorkspaceCapability",
     "StatFileCapability",
     "StoreMemoryCapability",
     "UpdateFileCapability",
     "UpdateMemoryCapability",
     "WebSearchCapability",
     "WorkspaceBoundaryError",
+    "WorkspaceSnapshotCapability",
     "WriteFileCapability",
     "register_builtin_capabilities",
     "resolve_in_workspace",
 ]
+

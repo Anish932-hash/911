@@ -393,9 +393,39 @@ class TaskPlanner:
         if any(w in lower for w in ("read file", "read the file", "show content of", "cat ")):
             caps.append("fs.read")
             reqs.append("Read and return contents of target file.")
+        if any(w in lower for w in ("delete file", "remove file")) and "delete everything" not in lower:
+            caps.append("fs.delete")
+            reqs.append("Delete target file safely within workspace boundary.")
         if any(w in lower for w in ("list files", "list directory", "ls ")):
             caps.append("fs.list")
             reqs.append("List entries in target workspace directory.")
+        if any(
+            w in lower
+            for w in (
+                "search workspace",
+                "search code",
+                "find symbol",
+                "grep workspace",
+                "search files for",
+            )
+        ):
+            caps.append("code.search")
+            reqs.append("Search workspace files or Python AST symbols and return matches.")
+            outputs.append("code_search_results")
+        if any(
+            w in lower
+            for w in (
+                "create snapshot",
+                "take snapshot",
+                "workspace snapshot",
+                "list snapshots",
+                "diff snapshot",
+                "restore snapshot",
+            )
+        ):
+            caps.append("workspace.snapshot")
+            reqs.append("Execute requested workspace snapshot operation.")
+            outputs.append("snapshot_result")
         if any(w in lower for w in ("inspect project", "analyze project", "project structure", "discover project")):
             caps.append("project.inspect")
             reqs.append("Inspect software project structure, manifests, entry points, and tests.")
@@ -505,7 +535,18 @@ class TaskPlanner:
             )
             unknowns.append("Destructive target scope confirmation")
 
-        if len(caps) == 1 and caps[0] in ("fs.read", "fs.list", "project.inspect", "memory.store", "memory.retrieve", "model.query", "chat.respond"):
+        if len(caps) == 1 and caps[0] in (
+            "fs.read",
+            "fs.list",
+            "fs.delete",
+            "project.inspect",
+            "code.search",
+            "workspace.snapshot",
+            "memory.store",
+            "memory.retrieve",
+            "model.query",
+            "chat.respond",
+        ):
             complexity = "simple_direct"
         elif len(caps) <= 2 and "capability.develop" not in caps and len(artifacts) <= 1:
             complexity = "moderate_inspect_act"
@@ -981,6 +1022,83 @@ class TaskPlanner:
                     description=f"Read content from '{target_file}'",
                     category="file_exists",
                     target=target_file,
+                )
+            )
+
+        # 4b. Check for safe file deletion
+        if "fs.delete" in intent.required_capabilities and intent.target_artifacts:
+            target_file = intent.target_artifacts[0]
+            sid = next_step_id()
+            actions.append(
+                PlannedAction(
+                    step_id=sid,
+                    description=f"Delete workspace file '{target_file}'",
+                    capability_id="fs.delete",
+                    parameters={"path": target_file},
+                )
+            )
+            requirements.append(
+                TaskRequirement(
+                    requirement_id="req-delete-output",
+                    description=f"Deleted '{target_file}' within workspace",
+                    category="output_present",
+                    target=sid,
+                )
+            )
+
+        # 4c. Check for workspace code/symbol search
+        if "code.search" in intent.required_capabilities:
+            q_match = re.search(
+                r"(?:search\s+(?:workspace|code|files)\s+for|find\s+symbol|grep\s+workspace\s+for)\s+['\"`]?([^'\"`\n]+?)['\"`]?\s*$",
+                instruction,
+                re.IGNORECASE,
+            )
+            query_str = q_match.group(1).strip() if q_match else instruction
+            mode_str = "symbol" if "symbol" in lower else "pattern"
+            sid = next_step_id()
+            actions.append(
+                PlannedAction(
+                    step_id=sid,
+                    description=f"Search workspace ({mode_str}) for '{query_str}'",
+                    capability_id="code.search",
+                    parameters={"query": query_str, "mode": mode_str},
+                )
+            )
+            requirements.append(
+                TaskRequirement(
+                    requirement_id="req-code-search",
+                    description="Workspace search completed with structured results",
+                    category="output_present",
+                    target=sid,
+                )
+            )
+
+        # 4d. Check for workspace snapshot operations
+        if "workspace.snapshot" in intent.required_capabilities:
+            snap_action = "create"
+            for act_word in ("restore", "diff", "list", "create"):
+                if act_word in lower:
+                    snap_action = act_word
+                    break
+            snap_params: dict[str, Any] = {"action": snap_action}
+            id_match = re.search(r"\bsnap-[a-zA-Z0-9_\-]+\b", instruction)
+            if id_match:
+                snap_params["snapshot_id"] = id_match.group(0)
+            sid = next_step_id()
+            actions.append(
+                PlannedAction(
+                    step_id=sid,
+                    description=f"Run workspace snapshot action '{snap_action}'",
+                    capability_id="workspace.snapshot",
+                    parameters=snap_params,
+                )
+            )
+            requirements.append(
+                TaskRequirement(
+                    requirement_id="req-workspace-snapshot",
+                    description=f"Workspace snapshot '{snap_action}' completed",
+                    category="output_present",
+                    target=sid,
                 )
             )
 

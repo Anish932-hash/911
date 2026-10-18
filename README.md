@@ -122,7 +122,16 @@ python -m agent911 develop-capability text.metrics --name "Text Metrics" --purpo
 python -m agent911 memory --store-key "project.target_os" --store-content "Windows 11" --category FACTUAL
 python -m agent911 memory --query "Windows"
 
-# 7. Detect operational weaknesses and run controlled self-improvement with automatic rollback
+# 7. Search workspace code (regex/literal) or Python AST symbols (functions/classes)
+python -m agent911 search "calculate_tax" --mode symbol
+python -m agent911 search "def " --glob "*.py"
+
+# 8. Create, diff, and restore workspace snapshots (.agent911/snapshots)
+python -m agent911 snapshot create --id snap-v1 --label "Before refactor"
+python -m agent911 snapshot diff --id snap-v1
+python -m agent911 snapshot restore --id snap-v1 --clean
+
+# 9. Detect operational weaknesses and run controlled self-improvement with automatic rollback
 python -m agent911 proposals --detect
 python -m agent911 self-improve <proposal_id>
 ```
@@ -131,8 +140,9 @@ python -m agent911 self-improve <proposal_id>
 
 ## 5. Running the Automated Test Suite
 
-Run the complete automated test suite (70+ unit, integration, recovery, capability-growth, verification, live-testing, and end-to-end tests):
+Run the complete automated test suite (79 unit, integration, recovery, capability-growth, verification, live-testing, Windows compatibility, and end-to-end tests):
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
+

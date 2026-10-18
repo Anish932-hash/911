@@ -310,12 +310,18 @@ class InstructionDistiller:
                 "shell:",
                 "compute word count",
                 "delete everything",
+                "search workspace",
+                "find symbol",
+                "delete file",
+                "remove file",
             )
         ) and not _BUILD_VERB_RE.search(lower):
             return False
 
-        # Exclude capability.develop tasks (handled by capability growth)
+        # Exclude capability.develop and workspace.snapshot tasks
         if re.search(r"\b(?:develop|create|build)\s+capability\b", lower):
+            return False
+        if re.search(r"\b(?:create|take|list|diff|restore)\s+(?:a\s+)?(?:workspace\s+)?snapshot\b", lower):
             return False
 
         # If build verb + artifact noun or file extension or messy build phrasing
