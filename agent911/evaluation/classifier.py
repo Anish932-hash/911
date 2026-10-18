@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from agent911.models import (
     ActionStatus,
     LiveTestStatus,
@@ -11,7 +9,6 @@ from agent911.models import (
     TaskState,
     VerificationStatus,
 )
-
 
 _BLOCKING_ERROR_TYPES = {
     "CapabilityUnavailableError",
@@ -30,7 +27,7 @@ class OutcomeClassifier:
     """
 
     @staticmethod
-    def classify(task: TaskState) -> Tuple[TaskOutcome, str]:
+    def classify(task: TaskState) -> tuple[TaskOutcome, str]:
         # 1. Check for unrecovered blocking conditions (missing credentials, permissions, workspace boundary)
         unrecovered_errors = [e for e in task.errors if not e.recovered]
         blocking_errors = [

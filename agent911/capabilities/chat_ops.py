@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import operator
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.model_provider import ModelProviderError
@@ -15,7 +15,6 @@ from agent911.models import (
     MemoryCategory,
     MemoryConfidence,
 )
-
 
 _SAFE_MATH_OPS = {
     ast.Add: operator.add,
@@ -30,7 +29,7 @@ _SAFE_MATH_OPS = {
 }
 
 
-def _try_eval_math(expr_text: str) -> Optional[float | int]:
+def _try_eval_math(expr_text: str) -> float | int | None:
     """Safely evaluate a pure arithmetic expression using Python AST."""
     cleaned = expr_text.strip().rstrip("?.!")
     cleaned = re.sub(
@@ -92,12 +91,12 @@ class ChatRespondCapability(Capability):
     operational_boundaries = "workspace_confined"
 
     def check_availability(
-        self, config: Optional[Any] = None
+        self, config: Any | None = None
     ) -> CapabilityAvailability:
         return CapabilityAvailability.AVAILABLE
 
     def execute(
-        self, params: Dict[str, Any], context: CapabilityContext
+        self, params: dict[str, Any], context: CapabilityContext
     ) -> CapabilityResult:
         message = str(params.get("message", "")).strip()
         if not message:
@@ -186,8 +185,8 @@ class ChatRespondCapability(Capability):
     @staticmethod
     def _extract_and_store_user_facts(
         message: str, context: CapabilityContext
-    ) -> List[Dict[str, str]]:
-        stored: List[Dict[str, str]] = []
+    ) -> list[dict[str, str]]:
+        stored: list[dict[str, str]] = []
 
         # Pattern 1: "My name is X" / "Call me X"
         name_m = re.search(
@@ -233,10 +232,10 @@ class ChatRespondCapability(Capability):
     def _build_contextual_reply(
         self,
         message: str,
-        stored_facts: List[Dict[str, str]],
-        factual_memories: List[Any],
-        recent_tasks: List[Dict[str, Any]],
-        capabilities: List[Dict[str, Any]],
+        stored_facts: list[dict[str, str]],
+        factual_memories: list[Any],
+        recent_tasks: list[dict[str, Any]],
+        capabilities: list[dict[str, Any]],
         context: CapabilityContext,
     ) -> str:
         lower = message.lower().strip()
@@ -391,7 +390,7 @@ class ChatRespondCapability(Capability):
         if matched_mems:
             mem_lines = [f"- **{m.key}**: {m.content}" for m in matched_mems]
             return (
-                f"Here's what I found in my memory related to your message:\n"
+                "Here's what I found in my memory related to your message:\n"
                 + "\n".join(mem_lines)
                 + "\n\nWould you like me to run an action in the workspace or update this information?"
             )

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from agent911.capabilities import CapabilityContext
 from agent911.config import AgentConfig
-from agent911.evaluation import LiveRunTester, OutcomeClassifier
+from agent911.evaluation import LiveRunTester
 from agent911.models import LiveTestStatus, TaskOutcome, VerificationStatus
 from agent911.orchestrator import Agent911Orchestrator
 

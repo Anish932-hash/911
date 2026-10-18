@@ -6,10 +6,13 @@ import re
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
-from agent911.capabilities.filesystem import WorkspaceBoundaryError, resolve_in_workspace
+from agent911.capabilities.filesystem import (
+    WorkspaceBoundaryError,
+    resolve_in_workspace,
+)
 from agent911.models import CapabilityResult
 
 
@@ -53,7 +56,7 @@ class RunTestsCapability(Capability):
         "duration_ms": "float",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         target_rel = params.get("target", "tests")
         runner = str(params.get("runner", "unittest")).lower()
         pattern = str(params.get("pattern", "test*.py"))
@@ -81,7 +84,7 @@ class RunTestsCapability(Capability):
         rel_target_str = str(target_path.relative_to(ws)) if target_path != ws else "."
 
         if runner == "pytest":
-            cmd: List[str] = [sys.executable, "-m", "pytest", rel_target_str, "-q"]
+            cmd: list[str] = [sys.executable, "-m", "pytest", rel_target_str, "-q"]
         elif runner == "unittest":
             if target_path.is_file():
                 cmd = [sys.executable, "-m", "unittest", rel_target_str, "-v"]

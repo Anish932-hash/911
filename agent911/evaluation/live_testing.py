@@ -7,16 +7,17 @@ import platform
 import subprocess
 import sys
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.capabilities.base import CapabilityContext
-from agent911.capabilities.filesystem import WorkspaceBoundaryError, resolve_in_workspace
+from agent911.capabilities.filesystem import (
+    WorkspaceBoundaryError,
+    resolve_in_workspace,
+)
 from agent911.memory import PersistentMemoryStore
 from agent911.models import (
     LiveRunTestRecord,
     LiveTestStatus,
-    TaskRequirement,
     TaskState,
     new_id,
 )
@@ -32,7 +33,7 @@ class LiveRunTester:
     def __init__(self, context: CapabilityContext) -> None:
         self.context = context
 
-    def _base_environment(self, isolation: str = "workspace") -> Dict[str, Any]:
+    def _base_environment(self, isolation: str = "workspace") -> dict[str, Any]:
         return {
             "workspace": str(self.context.workspace_path),
             "python_version": platform.python_version(),
@@ -40,17 +41,17 @@ class LiveRunTester:
             "isolation": isolation,
         }
 
-    def run_for_task(self, task: TaskState) -> List[LiveRunTestRecord]:
+    def run_for_task(self, task: TaskState) -> list[LiveRunTestRecord]:
         """
         Determine and execute appropriate Live Run Tests for a task based on the
         operations performed and artifacts created.
         """
-        records: List[LiveRunTestRecord] = []
+        records: list[LiveRunTestRecord] = []
         ws = self.context.workspace_path.resolve()
 
         # 1. Check if any Python scripts/modules were created or updated during the task
-        written_py_files: List[str] = []
-        written_json_files: List[str] = []
+        written_py_files: list[str] = []
+        written_json_files: list[str] = []
         for call in task.capability_calls:
             if call.success and call.capability_id in ("fs.write", "fs.update"):
                 p = call.parameters.get("path", "")
@@ -112,9 +113,9 @@ class LiveRunTester:
         self,
         task_id: str,
         rel_path: str,
-        args: Optional[List[str]] = None,
-        expected_stdout_substring: Optional[str] = None,
-        timeout_seconds: Optional[float] = None,
+        args: list[str] | None = None,
+        expected_stdout_substring: str | None = None,
+        timeout_seconds: float | None = None,
     ) -> LiveRunTestRecord:
         """Execute a Python file in a live subprocess and inspect exit code and output."""
         timeout = timeout_seconds or self.context.config.command_timeout_seconds
@@ -204,7 +205,7 @@ class LiveRunTester:
         task_id: str,
         rel_path: str,
         symbol_name: str,
-        call_args: Optional[List[Any]] = None,
+        call_args: list[Any] | None = None,
         expected_return: Any = None,
     ) -> LiveRunTestRecord:
         """
@@ -349,8 +350,8 @@ class LiveRunTester:
         self,
         task_id: str,
         capability_id: str,
-        sample_params: Dict[str, Any],
-        expected_output_subset: Optional[Dict[str, Any]] = None,
+        sample_params: dict[str, Any],
+        expected_output_subset: dict[str, Any] | None = None,
     ) -> LiveRunTestRecord:
         """Invoke a registered capability with real parameters and check runtime behavior."""
         t0 = time.monotonic()
@@ -436,12 +437,12 @@ class LiveRunTester:
     def test_command_live(
         self,
         task_id: str,
-        command: str | List[str],
-        expected_stdout: Optional[str] = None,
-        timeout_seconds: Optional[float] = None,
+        command: str | list[str],
+        expected_stdout: str | None = None,
+        timeout_seconds: float | None = None,
     ) -> LiveRunTestRecord:
         """Run a real command via cmd.run capability and record a LiveRunTestRecord."""
-        params: Dict[str, Any] = {"command": command}
+        params: dict[str, Any] = {"command": command}
         if timeout_seconds is not None:
             params["timeout_seconds"] = timeout_seconds
         res = self.context.registry.invoke("cmd.run", params, self.context)

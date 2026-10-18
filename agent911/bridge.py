@@ -1,18 +1,17 @@
-"""JSON bridge connecting the Node.js Chat UI server to the Python Agent911Orchestrator."""
+"""Programmatic JSON stdin/stdout bridge for Agent911Orchestrator automation and CLI integration."""
 
 from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from agent911.config import AgentConfig, ConfigurationError
 from agent911.models import MemoryCategory, MemoryConfidence
 from agent911.orchestrator import Agent911Orchestrator
 
 
-def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
+def handle_request(req: dict[str, Any]) -> dict[str, Any]:
     action = req.get("action")
     workspace = req.get("workspace")
     config_path = req.get("config_path")
@@ -173,7 +172,7 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
             mid = req.get("profile_id")
             set_default = bool(req.get("set_as_default", False))
             fallback_id = req.get("fallback_model")
-            res: Dict[str, Any] = {}
+            res: dict[str, Any] = {}
             if mid:
                 res = orchestrator.select_active_model(
                     str(mid), set_as_default=set_default, save=True
@@ -278,7 +277,7 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
                     "error": "capability_id, name, and purpose are required.",
                     "error_type": "InputValidationError",
                 }
-            dev_params: Dict[str, Any] = {
+            dev_params: dict[str, Any] = {
                 "capability_id": cap_id,
                 "name": name,
                 "purpose": purpose,
@@ -348,7 +347,7 @@ def handle_request(req: Dict[str, Any]) -> Dict[str, Any]:
                 category=MemoryCategory(category),
                 key=key,
                 content=content,
-                source="chat_ui",
+                source="cli_bridge",
                 confidence=MemoryConfidence(confidence),
             )
             return {"ok": True, "data": rec.to_dict()}

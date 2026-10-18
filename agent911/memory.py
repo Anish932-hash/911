@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any
 
 from agent911.config import redact_secrets
 from agent911.models import (
@@ -25,7 +26,7 @@ from agent911.models import (
 )
 
 
-def _tokenize_keywords(text: str) -> List[str]:
+def _tokenize_keywords(text: str) -> list[str]:
     """Extract normalized alphanumeric tokens of length >= 3 for relevance matching."""
     stop_words = {
         "the", "and", "for", "with", "that", "this", "from", "into", "when",
@@ -71,7 +72,7 @@ class PersistentMemoryStore:
     def __init__(
         self,
         db_path: str | Path,
-        secrets_to_redact: Optional[List[str]] = None,
+        secrets_to_redact: list[str] | None = None,
     ) -> None:
         self.db_path = Path(db_path).resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,9 +252,9 @@ class PersistentMemoryStore:
         category: MemoryCategory | str,
         key: str,
         content: str,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
         source: str = "agent",
-        evidence: Optional[Dict[str, Any]] = None,
+        evidence: dict[str, Any] | None = None,
         confidence: MemoryConfidence | str = MemoryConfidence.OBSERVED,
     ) -> MemoryRecord:
         """
@@ -282,7 +283,7 @@ class PersistentMemoryStore:
                 if isinstance(safe_evidence, dict):
                     merged_evidence.update(safe_evidence)
 
-                provenance: List[Dict[str, Any]] = json.loads(
+                provenance: list[dict[str, Any]] = json.loads(
                     existing["provenance_json"] or "[]"
                 )
                 if existing["content"] != safe_content:
@@ -376,8 +377,8 @@ class PersistentMemoryStore:
         reason: str = "Updated with newer evidence",
         source: str = "agent",
         confidence: MemoryConfidence | str = MemoryConfidence.VERIFIED,
-        evidence: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MemoryRecord]:
+        evidence: dict[str, Any] | None = None,
+    ) -> MemoryRecord | None:
         """
         Explicitly mark an inaccurate or outdated memory record as SUPERSEDED and insert
         a replacement record retaining full provenance.
@@ -477,10 +478,10 @@ class PersistentMemoryStore:
     def update_memory(
         self,
         memory_id: str,
-        content: Optional[str] = None,
-        confidence: Optional[MemoryConfidence | str] = None,
-        evidence: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MemoryRecord]:
+        content: str | None = None,
+        confidence: MemoryConfidence | str | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> MemoryRecord | None:
         """Update an existing memory record by ID while recording provenance."""
         with self._connect() as conn:
             row = conn.execute(
@@ -552,16 +553,16 @@ class PersistentMemoryStore:
 
     def retrieve_memories(
         self,
-        query: Optional[str] = None,
-        category: Optional[MemoryCategory | str] = None,
-        key: Optional[str] = None,
-        task_id: Optional[str] = None,
+        query: str | None = None,
+        category: MemoryCategory | str | None = None,
+        key: str | None = None,
+        task_id: str | None = None,
         limit: int = 10,
         include_inactive: bool = False,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         """Retrieve relevant active memories using structured filters and keyword scoring."""
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
 
         if not include_inactive:
             clauses.append("status = 'ACTIVE'")
@@ -594,7 +595,7 @@ class PersistentMemoryStore:
         if not tokens:
             return records[:limit]
 
-        scored: List[tuple[int, MemoryRecord]] = []
+        scored: list[tuple[int, MemoryRecord]] = []
         q_lower = query.lower()
         for rec in records:
             haystack = f"{rec.key} {rec.content}".lower()
@@ -803,18 +804,18 @@ class PersistentMemoryStore:
 
     def retrieve_experiences(
         self,
-        query: Optional[str] = None,
-        task_id: Optional[str] = None,
-        outcome: Optional[TaskOutcome | str] = None,
+        query: str | None = None,
+        task_id: str | None = None,
+        outcome: TaskOutcome | str | None = None,
         limit: int = 5,
         include_superseded: bool = False,
-    ) -> List[ExperienceRecord]:
+    ) -> list[ExperienceRecord]:
         """
         Retrieve relevant task experiences ranked by contextual similarity,
         verification confidence, and measured practical usefulness (Section 5.3 & 5.4).
         """
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
 
         if task_id is not None:
             clauses.append("task_id = ?")
@@ -842,7 +843,7 @@ class PersistentMemoryStore:
         if not tokens:
             return records[:limit]
 
-        scored: List[tuple[int, ExperienceRecord]] = []
+        scored: list[tuple[int, ExperienceRecord]] = []
         q_lower = query.lower()
         for rec in records:
             searchable = " ".join(
@@ -903,7 +904,7 @@ class PersistentMemoryStore:
                 ),
             )
 
-    def load_task(self, task_id: str) -> Optional[TaskState]:
+    def load_task(self, task_id: str) -> TaskState | None:
         """Load a persisted TaskState by task_id."""
         with self._connect() as conn:
             row = conn.execute(
@@ -913,7 +914,7 @@ class PersistentMemoryStore:
                 return None
             return TaskState.from_dict(json.loads(row["state_json"]))
 
-    def list_tasks(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_tasks(self, limit: int = 20) -> list[dict[str, Any]]:
         """List summary records of recent tasks."""
         with self._connect() as conn:
             rows = conn.execute(
@@ -934,11 +935,11 @@ class PersistentMemoryStore:
         task_id: str,
         operation: str,
         success: bool,
-        step_id: Optional[str] = None,
-        capability_id: Optional[str] = None,
+        step_id: str | None = None,
+        capability_id: str | None = None,
         input_data: Any = None,
         output_data: Any = None,
-        error: Optional[str] = None,
+        error: str | None = None,
         duration_ms: float = 0.0,
     ) -> str:
         """Record a redacted observability log entry."""
@@ -975,7 +976,7 @@ class PersistentMemoryStore:
             )
         return log_id
 
-    def get_execution_logs(self, task_id: str) -> List[Dict[str, Any]]:
+    def get_execution_logs(self, task_id: str) -> list[dict[str, Any]]:
         """Retrieve all execution log records for a given task."""
         with self._connect() as conn:
             rows = conn.execute(
@@ -1003,7 +1004,7 @@ class PersistentMemoryStore:
         purpose: str,
         verified: bool,
         live_tested: bool,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Persist registration metadata for an organically developed capability."""
         with self._connect() as conn:
@@ -1026,7 +1027,7 @@ class PersistentMemoryStore:
                 ),
             )
 
-    def list_custom_capabilities(self) -> List[Dict[str, Any]]:
+    def list_custom_capabilities(self) -> list[dict[str, Any]]:
         """Return all persisted custom capabilities."""
         with self._connect() as conn:
             rows = conn.execute(
@@ -1072,7 +1073,7 @@ class PersistentMemoryStore:
 
     def get_improvement_proposal(
         self, proposal_id: str
-    ) -> Optional[ImprovementProposal]:
+    ) -> ImprovementProposal | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT proposal_json FROM improvement_proposals WHERE proposal_id = ?",
@@ -1083,8 +1084,8 @@ class PersistentMemoryStore:
             return ImprovementProposal.from_dict(json.loads(row["proposal_json"]))
 
     def list_improvement_proposals(
-        self, status: Optional[ImprovementStatus | str] = None
-    ) -> List[ImprovementProposal]:
+        self, status: ImprovementStatus | str | None = None
+    ) -> list[ImprovementProposal]:
         with self._connect() as conn:
             if status is not None:
                 st_val = (
@@ -1126,7 +1127,7 @@ class PersistentMemoryStore:
             )
         return run_record
 
-    def list_self_improvement_runs(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_self_improvement_runs(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT run_json FROM self_improvement_runs ORDER BY timestamp DESC LIMIT ?",

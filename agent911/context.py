@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.memory import PersistentMemoryStore
 from agent911.models import (
     ActionStatus,
-    ExperienceRecord,
     MemoryCategory,
-    MemoryRecord,
     TaskState,
 )
 
@@ -30,8 +28,8 @@ class ContextManager:
     def retrieve_task_context(
         self,
         instruction: str,
-        error_hint: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        error_hint: str | None = None,
+    ) -> dict[str, Any]:
         """Retrieve relevant active memories and non-superseded experiences for a task."""
         factual_memories = self.memory_store.retrieve_memories(
             query=instruction, category=MemoryCategory.FACTUAL, limit=5
@@ -118,11 +116,11 @@ class ContextManager:
     def build_model_context(
         self,
         task: TaskState,
-        available_capabilities: List[Dict[str, Any]],
-        retrieved_context: Optional[Dict[str, Any]] = None,
+        available_capabilities: list[dict[str, Any]],
+        retrieved_context: dict[str, Any] | None = None,
         current_focus: str = "planning",
-        active_model_context_window_tokens: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        active_model_context_window_tokens: int | None = None,
+    ) -> dict[str, Any]:
         """
         Construct bounded context payload for the AI model interface.
         Adapts to active_model_context_window_tokens when known and automatically
@@ -153,7 +151,7 @@ class ContextManager:
             if a.status != ActionStatus.COMPLETED
         ]
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "focus": current_focus,
             "task_id": task.task_id,
             "original_instruction": task.original_instruction,
@@ -195,7 +193,7 @@ class ContextManager:
 
         # Context exceeds window: compress intermediate outputs and verbose histories
         compressed_summary = self.compress_context(task)
-        compact_payload: Dict[str, Any] = {
+        compact_payload: dict[str, Any] = {
             "focus": current_focus,
             "task_id": task.task_id,
             "original_instruction": task.original_instruction,
@@ -244,14 +242,14 @@ class ContextManager:
 
     def prepare_task_for_resumption(
         self, task: TaskState, workspace_root: Path
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Inspect a restored task before resuming execution.
         Completed steps whose filesystem artifacts still exist are preserved.
         Completed steps whose output files were deleted or invalidated are reset to PENDING.
         Returns a list of diagnostic notes describing any reset steps.
         """
-        notes: List[str] = []
+        notes: list[str] = []
         for action in task.planned_actions:
             if action.status == ActionStatus.IN_PROGRESS:
                 action.status = ActionStatus.PENDING

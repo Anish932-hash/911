@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import patch
 
 from agent911.bridge import handle_request
@@ -125,7 +125,7 @@ class MathSquareCapability(Capability):
         Exercise the complete lifecycle using a deterministic model fixture (clearly marked
         is_simulated=True) that plans a multi-step software creation and unit test run.
         """
-        def deterministic_planner(prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        def deterministic_planner(prompt: str, context: dict[str, Any]) -> dict[str, Any]:
             return {
                 "main_goal": "Create math_utils.py and test_math_utils.py and run unit tests",
                 "explicit_requirements": [

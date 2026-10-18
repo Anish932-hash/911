@@ -6,7 +6,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 
 def utc_now_iso() -> str:
@@ -68,7 +68,7 @@ class TaskLifecycleStage(str, Enum):
     INTERRUPTED = "INTERRUPTED"
 
 
-_ALLOWED_STAGE_TRANSITIONS: Dict[TaskLifecycleStage, Set[TaskLifecycleStage]] = {
+_ALLOWED_STAGE_TRANSITIONS: dict[TaskLifecycleStage, set[TaskLifecycleStage]] = {
     TaskLifecycleStage.CREATED: {
         TaskLifecycleStage.UNDERSTANDING,
         TaskLifecycleStage.RETRIEVING_CONTEXT,
@@ -216,19 +216,19 @@ class DistilledBuildSpec:
     is_build_intent: bool = False
     what_user_wants_to_build: str = ""
     concrete_instruction: str = ""
-    concrete_steps: List[str] = field(default_factory=list)
-    target_artifacts: List[Dict[str, Any]] = field(default_factory=list)
-    extracted_functions: List[str] = field(default_factory=list)
-    extracted_features: List[str] = field(default_factory=list)
-    ambiguities_resolved: List[str] = field(default_factory=list)
-    noise_filtered: List[str] = field(default_factory=list)
+    concrete_steps: list[str] = field(default_factory=list)
+    target_artifacts: list[dict[str, Any]] = field(default_factory=list)
+    extracted_functions: list[str] = field(default_factory=list)
+    extracted_features: list[str] = field(default_factory=list)
+    ambiguities_resolved: list[str] = field(default_factory=list)
+    noise_filtered: list[str] = field(default_factory=list)
     distilled_by: str = "heuristic_distiller"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DistilledBuildSpec:
+    def from_dict(cls, data: dict[str, Any]) -> DistilledBuildSpec:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known}
         return cls(**filtered)
@@ -240,27 +240,27 @@ class InstructionIntent:
 
     original_instruction: str
     main_goal: str
-    explicit_requirements: List[str] = field(default_factory=list)
-    inferred_requirements: List[str] = field(default_factory=list)
-    expected_outputs: List[str] = field(default_factory=list)
-    constraints: List[str] = field(default_factory=list)
-    relevant_context: Dict[str, Any] = field(default_factory=dict)
-    required_capabilities: List[str] = field(default_factory=list)
-    available_resources: List[str] = field(default_factory=list)
-    assumptions: List[str] = field(default_factory=list)
-    completion_conditions: List[str] = field(default_factory=list)
-    unknowns: List[str] = field(default_factory=list)
-    target_artifacts: List[str] = field(default_factory=list)
+    explicit_requirements: list[str] = field(default_factory=list)
+    inferred_requirements: list[str] = field(default_factory=list)
+    expected_outputs: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    relevant_context: dict[str, Any] = field(default_factory=dict)
+    required_capabilities: list[str] = field(default_factory=list)
+    available_resources: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    completion_conditions: list[str] = field(default_factory=list)
+    unknowns: list[str] = field(default_factory=list)
+    target_artifacts: list[str] = field(default_factory=list)
     complexity_level: str = "simple_direct"  # simple_direct, moderate_inspect_act, complex_multi_stage
     clarification_needed: bool = False
-    clarification_question: Optional[str] = None
+    clarification_question: str | None = None
     interpreted_by: str = "heuristic"  # "model" or "heuristic"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> InstructionIntent:
+    def from_dict(cls, data: dict[str, Any]) -> InstructionIntent:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known}
         return cls(**filtered)
@@ -273,16 +273,16 @@ class TaskRequirement:
     requirement_id: str
     description: str
     category: str
-    target: Optional[str] = None
+    target: str | None = None
     expected: Any = None
     required: bool = True
-    satisfied: Optional[bool] = None
+    satisfied: bool | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> TaskRequirement:
+    def from_dict(cls, data: dict[str, Any]) -> TaskRequirement:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in data.items() if k in known})
 
@@ -294,24 +294,24 @@ class PlannedAction:
     step_id: str
     description: str
     capability_id: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    depends_on: List[str] = field(default_factory=list)
-    expected_outputs: List[str] = field(default_factory=list)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)
+    expected_outputs: list[str] = field(default_factory=list)
     status: ActionStatus = ActionStatus.PENDING
     required: bool = True
     is_capability_growth: bool = False
-    output_summary: Optional[str] = None
-    completion_evidence: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    output_summary: str | None = None
+    completion_evidence: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
     retry_status: str = "none"  # none, retried_recovered, retried_failed
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["status"] = self.status.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> PlannedAction:
+    def from_dict(cls, data: dict[str, Any]) -> PlannedAction:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         copied = {k: v for k, v in data.items() if k in known}
         copied["status"] = ActionStatus(copied.get("status", ActionStatus.PENDING.value))
@@ -325,15 +325,15 @@ class CapabilityResult:
     capability_id: str
     success: bool
     data: Any = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    error_type: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> CapabilityResult:
+    def from_dict(cls, data: dict[str, Any]) -> CapabilityResult:
         return cls(**data)
 
 
@@ -345,22 +345,22 @@ class CapabilityCallRecord:
     task_id: str
     step_id: str
     capability_id: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     success: bool
     output_data: Any = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
     duration_ms: float = 0.0
     intended_action: str = ""
     retry_occurred: bool = False
     attempt_number: int = 1
     timestamp: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> CapabilityCallRecord:
+    def from_dict(cls, data: dict[str, Any]) -> CapabilityCallRecord:
         return cls(**data)
 
 
@@ -374,9 +374,9 @@ class VerificationCheckResult:
     method: str
     observed_result: str
     status: VerificationStatus
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    failure_explanation: Optional[str] = None
-    remaining_uncertainty: Optional[str] = None
+    evidence: dict[str, Any] = field(default_factory=dict)
+    failure_explanation: str | None = None
+    remaining_uncertainty: str | None = None
     required: bool = True
     is_ai_assertion_only: bool = False
     timestamp: str = field(default_factory=utc_now_iso)
@@ -393,13 +393,13 @@ class VerificationCheckResult:
                     "Requires direct operational or filesystem evidence."
                 )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["status"] = self.status.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> VerificationCheckResult:
+    def from_dict(cls, data: dict[str, Any]) -> VerificationCheckResult:
         copied = dict(data)
         copied["status"] = VerificationStatus(copied["status"])
         return cls(**copied)
@@ -413,14 +413,14 @@ class LiveRunTestRecord:
     task_id: str
     executed_operation: str
     target_component: str
-    environment: Dict[str, Any]
-    exit_code: Optional[int]
+    environment: dict[str, Any]
+    exit_code: int | None
     stdout: str
     stderr: str
     expected_behavior_occurred: bool
     status: LiveTestStatus
-    limitations: Optional[str] = None
-    reproduction_command: Optional[str] = None
+    limitations: str | None = None
+    reproduction_command: str | None = None
     is_mocked: bool = False
     required: bool = True
     duration_ms: float = 0.0
@@ -432,13 +432,13 @@ class LiveRunTestRecord:
                 "Executed against a mock or deterministic double; does not establish live external service connectivity."
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["status"] = self.status.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> LiveRunTestRecord:
+    def from_dict(cls, data: dict[str, Any]) -> LiveRunTestRecord:
         copied = dict(data)
         copied["status"] = LiveTestStatus(copied["status"])
         return cls(**copied)
@@ -450,19 +450,19 @@ class ExecutionErrorRecord:
 
     error_id: str
     task_id: str
-    step_id: Optional[str]
-    capability_id: Optional[str]
+    step_id: str | None
+    capability_id: str | None
     error_type: str
     message: str
-    diagnostics: Dict[str, Any] = field(default_factory=dict)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
     recovered: bool = False
     timestamp: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ExecutionErrorRecord:
+    def from_dict(cls, data: dict[str, Any]) -> ExecutionErrorRecord:
         return cls(**data)
 
 
@@ -476,16 +476,16 @@ class RecoveryAttemptRecord:
     failed_operation: str
     probable_cause: str
     selected_correction: str
-    correction_parameters: Dict[str, Any] = field(default_factory=dict)
+    correction_parameters: dict[str, Any] = field(default_factory=dict)
     succeeded: bool = False
-    notes: Optional[str] = None
+    notes: str | None = None
     timestamp: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> RecoveryAttemptRecord:
+    def from_dict(cls, data: dict[str, Any]) -> RecoveryAttemptRecord:
         return cls(**data)
 
 
@@ -497,24 +497,24 @@ class MemoryRecord:
     category: MemoryCategory
     key: str
     content: str
-    task_id: Optional[str] = None
+    task_id: str | None = None
     source: str = "agent"
-    evidence: Dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
     confidence: MemoryConfidence = MemoryConfidence.OBSERVED
     status: str = "ACTIVE"  # ACTIVE, SUPERSEDED, OBSOLETE
-    superseded_by: Optional[str] = None
-    provenance_history: List[Dict[str, Any]] = field(default_factory=list)
+    superseded_by: str | None = None
+    provenance_history: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["category"] = self.category.value
         data["confidence"] = self.confidence.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> MemoryRecord:
+    def from_dict(cls, data: dict[str, Any]) -> MemoryRecord:
         copied = dict(data)
         copied["category"] = MemoryCategory(copied["category"])
         copied["confidence"] = MemoryConfidence(
@@ -535,24 +535,24 @@ class ExperienceRecord:
     task_id: str
     objective: str
     plan_summary: str
-    capabilities_used: List[str] = field(default_factory=list)
-    operations_performed: List[str] = field(default_factory=list)
-    actual_results: Dict[str, Any] = field(default_factory=dict)
-    verification_summary: Dict[str, Any] = field(default_factory=dict)
-    live_test_summary: Dict[str, Any] = field(default_factory=dict)
-    unexpected_failures: List[str] = field(default_factory=list)
-    identified_causes: List[str] = field(default_factory=list)
-    confirmed_causes: List[str] = field(default_factory=list)
-    hypothesized_causes: List[str] = field(default_factory=list)
-    corrections_attempted: List[str] = field(default_factory=list)
-    successful_remedies: List[str] = field(default_factory=list)
-    remaining_limitations: List[str] = field(default_factory=list)
-    reusable_procedures: List[str] = field(default_factory=list)
+    capabilities_used: list[str] = field(default_factory=list)
+    operations_performed: list[str] = field(default_factory=list)
+    actual_results: dict[str, Any] = field(default_factory=dict)
+    verification_summary: dict[str, Any] = field(default_factory=dict)
+    live_test_summary: dict[str, Any] = field(default_factory=dict)
+    unexpected_failures: list[str] = field(default_factory=list)
+    identified_causes: list[str] = field(default_factory=list)
+    confirmed_causes: list[str] = field(default_factory=list)
+    hypothesized_causes: list[str] = field(default_factory=list)
+    corrections_attempted: list[str] = field(default_factory=list)
+    successful_remedies: list[str] = field(default_factory=list)
+    remaining_limitations: list[str] = field(default_factory=list)
+    reusable_procedures: list[str] = field(default_factory=list)
     outcome: TaskOutcome = TaskOutcome.UNVERIFIED
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     task_type: str = "general"
-    evidence_supporting_outcome: Dict[str, Any] = field(default_factory=dict)
-    applicable_conditions: List[str] = field(default_factory=list)
+    evidence_supporting_outcome: dict[str, Any] = field(default_factory=dict)
+    applicable_conditions: list[str] = field(default_factory=list)
     lesson_confidence: str = "OBSERVED"  # VERIFIED_EXECUTION, OBSERVED, UNVERIFIED_CLAIM, HYPOTHESIS
     superseded: bool = False
     times_retrieved: int = 0
@@ -570,13 +570,13 @@ class ExperienceRecord:
         ):
             self.lesson_confidence = "UNVERIFIED_CLAIM"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["outcome"] = self.outcome.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ExperienceRecord:
+    def from_dict(cls, data: dict[str, Any]) -> ExperienceRecord:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         copied = {k: v for k, v in data.items() if k in known}
         copied["outcome"] = TaskOutcome(copied.get("outcome", TaskOutcome.UNVERIFIED.value))
@@ -592,26 +592,26 @@ class DiagnosticReport:
 
     diagnostic_id: str
     task_id: str
-    step_id: Optional[str]
+    step_id: str | None
     observed_failure: str
     root_cause_category: FailureRootCauseCategory
-    confirmed_facts: List[str] = field(default_factory=list)
-    likely_hypotheses: List[str] = field(default_factory=list)
-    eliminated_causes: List[str] = field(default_factory=list)
-    remaining_uncertainty: Optional[str] = None
-    diagnostic_action_taken: Optional[str] = None
+    confirmed_facts: list[str] = field(default_factory=list)
+    likely_hypotheses: list[str] = field(default_factory=list)
+    eliminated_causes: list[str] = field(default_factory=list)
+    remaining_uncertainty: str | None = None
+    diagnostic_action_taken: str | None = None
     recommended_correction: str = "none"
     repeated_loop_detected: bool = False
     timestamp: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["report_id"] = self.diagnostic_id
         data["root_cause_category"] = self.root_cause_category.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DiagnosticReport:
+    def from_dict(cls, data: dict[str, Any]) -> DiagnosticReport:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         copied = {k: v for k, v in data.items() if k in known}
         copied["root_cause_category"] = FailureRootCauseCategory(
@@ -628,15 +628,15 @@ class CapabilityProposal:
     name: str
     what_it_does: str
     why_needed: str
-    inputs: Dict[str, Any] = field(default_factory=dict)
-    outputs: Dict[str, Any] = field(default_factory=dict)
-    dependencies: List[str] = field(default_factory=list)
+    inputs: dict[str, Any] = field(default_factory=dict)
+    outputs: dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
     operational_boundaries: str = "workspace_confined"
     integration_notes: str = "Register in CapabilityRegistry and persist in SQLite custom_capabilities."
     verification_plan: str = "Verify AST/bytecode compilation, contract fields, and registration."
     live_test_plan: str = "Invoke capability with representative inputs in LiveRunTester and check exit/output."
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -650,10 +650,10 @@ class CapabilityGapAnalysis:
     missing_element_type: str  # capability, dependency, configuration_setting, credential, permission, information, model_feature, external_service, none
     missing_identifier: str
     explanation: str
-    reusable_existing_capabilities: List[str] = field(default_factory=list)
-    capability_proposal: Optional[CapabilityProposal] = None
+    reusable_existing_capabilities: list[str] = field(default_factory=list)
+    capability_proposal: CapabilityProposal | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         if self.capability_proposal is not None:
             data["capability_proposal"] = self.capability_proposal.to_dict()
@@ -671,29 +671,29 @@ class ImprovementProposal:
     title: str
     category: str  # config_default, retrieval_ranking, capability_growth, recovery_rule, model_routing, test_coverage
     observed_problem: str
-    supporting_evidence: Dict[str, Any] = field(default_factory=dict)
+    supporting_evidence: dict[str, Any] = field(default_factory=dict)
     likely_cause: str = ""
     proposed_change: str = ""
-    expected_benefits: List[str] = field(default_factory=list)
-    potential_regressions: List[str] = field(default_factory=list)
-    required_dependencies: List[str] = field(default_factory=list)
+    expected_benefits: list[str] = field(default_factory=list)
+    potential_regressions: list[str] = field(default_factory=list)
+    required_dependencies: list[str] = field(default_factory=list)
     implementation_scope: str = "bounded_config_or_capability"
     test_plan: str = ""
-    success_conditions: List[str] = field(default_factory=list)
+    success_conditions: list[str] = field(default_factory=list)
     priority: str = "MEDIUM"  # HIGH, MEDIUM, LOW
     priority_rationale: str = ""
     status: ImprovementStatus = ImprovementStatus.PROPOSED
-    action_payload: Dict[str, Any] = field(default_factory=dict)
+    action_payload: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["status"] = self.status.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> ImprovementProposal:
+    def from_dict(cls, data: dict[str, Any]) -> ImprovementProposal:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         copied = {k: v for k, v in data.items() if k in known}
         copied["status"] = ImprovementStatus(
@@ -711,19 +711,19 @@ class SelfImprovementRunRecord:
 
     run_id: str
     proposal_id: str
-    baseline_behavior: Dict[str, Any] = field(default_factory=dict)
-    change_applied: Dict[str, Any] = field(default_factory=dict)
+    baseline_behavior: dict[str, Any] = field(default_factory=dict)
+    change_applied: dict[str, Any] = field(default_factory=dict)
     expected_result: str = ""
     actual_result: str = ""
     verification_passed: bool = False
     live_test_passed: bool = False
-    regressions_observed: List[str] = field(default_factory=list)
+    regressions_observed: list[str] = field(default_factory=list)
     rolled_back: bool = False
     final_disposition: str = "PENDING"  # VALIDATED_SUCCESS, ROLLED_BACK_FAILED, REJECTED_SECURITY_BOUNDARY
-    remaining_uncertainty: Optional[str] = None
+    remaining_uncertainty: str | None = None
     timestamp: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["verification_status"] = "PASSED" if self.verification_passed else "FAILED"
         d["live_test_status"] = "PASSED" if self.live_test_passed else "FAILED"
@@ -738,40 +738,40 @@ class TaskState:
     task_id: str
     original_instruction: str
     interpreted_objective: str = ""
-    intent: Optional[InstructionIntent] = None
-    distilled_spec: Optional[DistilledBuildSpec] = None
-    requirements: List[TaskRequirement] = field(default_factory=list)
-    assumptions: List[str] = field(default_factory=list)
+    intent: InstructionIntent | None = None
+    distilled_spec: DistilledBuildSpec | None = None
+    requirements: list[TaskRequirement] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
     selected_strategy: str = ProblemSolvingStrategy.DIRECT_EXECUTION.value
     strategy_rationale: str = ""
-    strategy_history: List[Dict[str, Any]] = field(default_factory=list)
-    planned_actions: List[PlannedAction] = field(default_factory=list)
-    completed_actions: List[str] = field(default_factory=list)
-    pending_actions: List[str] = field(default_factory=list)
+    strategy_history: list[dict[str, Any]] = field(default_factory=list)
+    planned_actions: list[PlannedAction] = field(default_factory=list)
+    completed_actions: list[str] = field(default_factory=list)
+    pending_actions: list[str] = field(default_factory=list)
     current_execution_state: TaskLifecycleStage = TaskLifecycleStage.CREATED
-    capability_calls: List[CapabilityCallRecord] = field(default_factory=list)
-    relevant_outputs: Dict[str, Any] = field(default_factory=dict)
-    verification_results: List[VerificationCheckResult] = field(default_factory=list)
-    live_run_results: List[LiveRunTestRecord] = field(default_factory=list)
-    errors: List[ExecutionErrorRecord] = field(default_factory=list)
-    diagnostics: List[Dict[str, Any]] = field(default_factory=list)
-    recovery_attempts: List[RecoveryAttemptRecord] = field(default_factory=list)
-    capability_gap_analysis: Optional[Dict[str, Any]] = None
-    capability_gap_analyses: List[Dict[str, Any]] = field(default_factory=list)
-    model_routing_decisions: List[Dict[str, Any]] = field(default_factory=list)
-    resource_metrics: Dict[str, Any] = field(default_factory=dict)
+    capability_calls: list[CapabilityCallRecord] = field(default_factory=list)
+    relevant_outputs: dict[str, Any] = field(default_factory=dict)
+    verification_results: list[VerificationCheckResult] = field(default_factory=list)
+    live_run_results: list[LiveRunTestRecord] = field(default_factory=list)
+    errors: list[ExecutionErrorRecord] = field(default_factory=list)
+    diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    recovery_attempts: list[RecoveryAttemptRecord] = field(default_factory=list)
+    capability_gap_analysis: dict[str, Any] | None = None
+    capability_gap_analyses: list[dict[str, Any]] = field(default_factory=list)
+    model_routing_decisions: list[dict[str, Any]] = field(default_factory=list)
+    resource_metrics: dict[str, Any] = field(default_factory=dict)
     final_outcome: TaskOutcome = TaskOutcome.UNVERIFIED
     outcome_summary: str = ""
     assistant_response: str = ""
     interaction_mode: str = "task_execution"
-    associated_experience_ids: List[str] = field(default_factory=list)
-    decisions: List[str] = field(default_factory=list)
-    context_summary: Optional[str] = None
+    associated_experience_ids: list[str] = field(default_factory=list)
+    decisions: list[str] = field(default_factory=list)
+    context_summary: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
     @property
-    def diagnostic_reports(self) -> List[Dict[str, Any]]:
+    def diagnostic_reports(self) -> list[dict[str, Any]]:
         return self.diagnostics
 
     def touch(self) -> None:
@@ -819,7 +819,7 @@ class TaskState:
         ]
         self.touch()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "original_instruction": self.original_instruction,
@@ -859,7 +859,7 @@ class TaskState:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> TaskState:
+    def from_dict(cls, data: dict[str, Any]) -> TaskState:
         return cls(
             task_id=data["task_id"],
             original_instruction=data["original_instruction"],

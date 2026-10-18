@@ -8,7 +8,7 @@ import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agent911.config import AgentConfig
 from agent911.memory import PersistentMemoryStore
@@ -24,9 +24,9 @@ class CapabilityContext:
     memory_store: PersistentMemoryStore
     model_interface: ModelInterface
     registry: Any  # CapabilityRegistry
-    task_id: Optional[str] = None
-    step_id: Optional[str] = None
-    research_cache: Dict[str, Any] = field(default_factory=dict)
+    task_id: str | None = None
+    step_id: str | None = None
+    research_cache: dict[str, Any] = field(default_factory=dict)
 
     @property
     def workspace_path(self) -> Path:
@@ -43,22 +43,22 @@ class Capability(ABC):
     identifier: str = ""
     name: str = ""
     purpose: str = ""
-    input_schema: Dict[str, Any] = {}
-    output_format: Dict[str, Any] = {}
+    input_schema: dict[str, Any] = {}
+    output_format: dict[str, Any] = {}
     error_behavior: str = "Returns CapabilityResult(success=False, error=..., error_type=...)"
-    required_config: List[str] = []
-    required_dependencies: List[str] = []
+    required_config: list[str] = []
+    required_dependencies: list[str] = []
     # Supported platform families. Use "all" for portable capabilities.
-    supported_platforms: List[str] = ["all"]
-    operational_limitations: List[str] = []
-    side_effects: List[str] = ["read_only"]
+    supported_platforms: list[str] = ["all"]
+    operational_limitations: list[str] = []
+    side_effects: list[str] = ["read_only"]
     permission_boundary: str = "workspace_confined"
-    verification_evidence: Dict[str, Any] = {}
+    verification_evidence: dict[str, Any] = {}
     is_custom_grown: bool = False
     verified: bool = True
     live_tested: bool = True
 
-    def validate_input(self, params: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    def validate_input(self, params: dict[str, Any]) -> tuple[bool, str | None]:
         """Validate input parameters against declared input_schema."""
         if not isinstance(params, dict):
             return False, "Capability parameters must be a dictionary."
@@ -96,7 +96,7 @@ class Capability(ABC):
                     )
         return True, None
 
-    def check_missing_dependency(self) -> Optional[str]:
+    def check_missing_dependency(self) -> str | None:
         """Return the name of the first missing Python package or binary dependency, if any."""
         for dep in self.required_dependencies:
             if dep.startswith("bin:"):
@@ -140,7 +140,7 @@ class Capability(ABC):
                     return CapabilityAvailability.REQUIRES_CONFIG
         return CapabilityAvailability.AVAILABLE
 
-    def describe(self, config: AgentConfig) -> Dict[str, Any]:
+    def describe(self, config: AgentConfig) -> dict[str, Any]:
         """Return a structured description of the capability, its contract, and its availability."""
         return {
             "identifier": self.identifier,
@@ -170,7 +170,7 @@ class Capability(ABC):
 
     @abstractmethod
     def execute(
-        self, params: Dict[str, Any], context: CapabilityContext
+        self, params: dict[str, Any], context: CapabilityContext
     ) -> CapabilityResult:
         """Perform the capability's operation and return a structured CapabilityResult."""
         raise NotImplementedError

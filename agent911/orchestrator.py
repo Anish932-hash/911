@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from agent911.capabilities import (
     CapabilityContext,
@@ -27,7 +27,6 @@ from agent911.models import (
     ImprovementStatus,
     MemoryCategory,
     MemoryConfidence,
-    PlannedAction,
     TaskLifecycleStage,
     TaskOutcome,
     TaskState,
@@ -48,17 +47,21 @@ class Agent911Orchestrator:
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        deterministic_responder: Optional[
-            Callable[[str, Dict[str, Any]], str | Dict[str, Any]]
-        ] = None,
+        config: AgentConfig | None = None,
+        deterministic_responder: Callable[[str, dict[str, Any]], str | dict[str, Any]] | None = None,
     ) -> None:
         self.config = config or AgentConfig.load()
         self.config.validate()
         self.config.ensure_directories()
 
         api_key = self.config.model.resolve_api_key(self.config.credential_store)
-        secrets = [api_key] if api_key else []
+        secrets = (
+            self.config.credential_store.all_known_secrets()
+            if self.config.credential_store
+            else []
+        )
+        if api_key and api_key not in secrets:
+            secrets.append(api_key)
         self.memory_store = PersistentMemoryStore(
             db_path=self.config.db_path, secrets_to_redact=secrets
         )
@@ -94,7 +97,7 @@ class Agent911Orchestrator:
     # Provider & Model Configuration Operations (Section 2)
     # ------------------------------------------------------------------
 
-    def list_providers(self) -> List[Dict[str, Any]]:
+    def list_providers(self) -> list[dict[str, Any]]:
         """List all configured providers with safe masked credential status."""
         store = self.config.credential_store
         out = []
@@ -120,10 +123,10 @@ class Agent911Orchestrator:
 
     def upsert_provider(
         self,
-        provider_data: Dict[str, Any] | ProviderConfig,
-        api_key: Optional[str] = None,
+        provider_data: dict[str, Any] | ProviderConfig,
+        api_key: str | None = None,
         save: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add or update a provider configuration and optionally store its API key securely."""
         pcfg = self.config.add_or_update_provider(provider_data, api_key=api_key)
         self.model_interface.config = self.config.model
@@ -137,7 +140,7 @@ class Agent911Orchestrator:
         if save:
             self.config.save()
 
-    def list_models(self) -> List[Dict[str, Any]]:
+    def list_models(self) -> list[dict[str, Any]]:
         """List all configured model profiles with active/default/fallback markers."""
         out = []
         for mid, mcfg in sorted(self.config.models.items()):
@@ -149,8 +152,8 @@ class Agent911Orchestrator:
         return out
 
     def upsert_model(
-        self, model_data: Dict[str, Any] | ModelProfileConfig, save: bool = True
-    ) -> Dict[str, Any]:
+        self, model_data: dict[str, Any] | ModelProfileConfig, save: bool = True
+    ) -> dict[str, Any]:
         """Add or update a model profile configuration."""
         mcfg = self.config.add_or_update_model(model_data)
         self.model_interface.config = self.config.model
@@ -169,7 +172,7 @@ class Agent911Orchestrator:
         profile_id: str,
         set_as_default: bool = False,
         save: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Switch the active model at runtime without restarting the application."""
         self.model_interface.switch_active_model(
             profile_id, set_as_default=set_as_default
@@ -184,8 +187,8 @@ class Agent911Orchestrator:
         }
 
     def set_fallback_model(
-        self, profile_id: Optional[str], save: bool = True
-    ) -> Dict[str, Any]:
+        self, profile_id: str | None, save: bool = True
+    ) -> dict[str, Any]:
         """Configure or clear the fallback model profile."""
         if profile_id is not None and profile_id not in self.config.models:
             from agent911.config import ConfigurationError
@@ -201,7 +204,7 @@ class Agent911Orchestrator:
         }
 
     def test_model_connection(
-        self, profile_id: Optional[str] = None
+        self, profile_id: str | None = None
     ) -> ConnectivityReport:
         """Execute a genuine connection test against the active or specified model profile."""
         return self.model_interface.check_connectivity(target_profile_id=profile_id)
@@ -226,9 +229,9 @@ class Agent911Orchestrator:
     def execute_task(
         self,
         instruction: str,
-        explicit_plan: Optional[List[Dict[str, Any]]] = None,
-        explicit_requirements: Optional[List[Dict[str, Any]]] = None,
-        stop_after_step: Optional[int] = None,
+        explicit_plan: list[dict[str, Any]] | None = None,
+        explicit_requirements: list[dict[str, Any]] | None = None,
+        stop_after_step: int | None = None,
     ) -> TaskState:
         """
         Execute a user instruction through the full Agent 911 task lifecycle.
@@ -309,8 +312,8 @@ class Agent911Orchestrator:
     def _run_task_pipeline(
         self,
         task: TaskState,
-        stop_after_step: Optional[int] = None,
-        retrieved_experiences: Optional[List[Dict[str, Any]]] = None,
+        stop_after_step: int | None = None,
+        retrieved_experiences: list[dict[str, Any]] | None = None,
     ) -> TaskState:
         pipeline_t0 = time.perf_counter()
         recovery_engine = RecoveryEngine(
@@ -320,7 +323,7 @@ class Agent911Orchestrator:
         self.memory_store.save_task(task)
 
         # Resource-aware cache to avoid redundant unchanged file inspections within a task (Section 11.1)
-        read_cache: Dict[str, Any] = {}
+        read_cache: dict[str, Any] = {}
         avoided_redundant_ops = 0
         model_calls_count = 0
 
@@ -382,7 +385,7 @@ class Agent911Orchestrator:
             }
 
             # Check if this is a redundant read of an unchanged file within the same task
-            cache_key: Optional[str] = None
+            cache_key: str | None = None
             if action.capability_id in ("fs.read", "fs.stat") and "path" in clean_params:
                 cache_key = f"{action.capability_id}:{clean_params.get('path')}"
 
@@ -605,8 +608,8 @@ class Agent911Orchestrator:
         identified_causes = [
             r.probable_cause for r in task.recovery_attempts if r.probable_cause
         ]
-        confirmed_causes: List[str] = []
-        hypothesized_causes: List[str] = []
+        confirmed_causes: list[str] = []
+        hypothesized_causes: list[str] = []
         for dr in task.diagnostic_reports:
             for cf in dr.get("confirmed_facts", []):
                 if cf not in confirmed_causes:
@@ -712,7 +715,7 @@ class Agent911Orchestrator:
         else:
             task.interaction_mode = "task_execution"
 
-        parts: List[str] = []
+        parts: list[str] = []
         if task.final_outcome != TaskOutcome.SUCCESS:
             parts.append(
                 f"Task status: **{task.final_outcome.value}**. "
@@ -864,8 +867,8 @@ class Agent911Orchestrator:
         error_type: str = "CapabilityNotFoundError",
         error_message: str = "",
         action_description: str = "",
-        action_parameters: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        action_parameters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Distinguish missing capabilities from dependencies, credentials, config, or model limits."""
         gap = self.gap_analyzer.analyze_failure(
             capability_id=capability_id,
@@ -877,7 +880,7 @@ class Agent911Orchestrator:
         )
         return gap.to_dict()
 
-    def diagnose_task(self, task_id: str) -> Dict[str, Any]:
+    def diagnose_task(self, task_id: str) -> dict[str, Any]:
         """Return structured diagnostic reports, capability gap analyses, and loop detection for a task."""
         task = self.memory_store.load_task(task_id)
         if task is None:
@@ -895,19 +898,19 @@ class Agent911Orchestrator:
             "resource_metrics": task.resource_metrics,
         }
 
-    def detect_and_propose_improvements(self) -> List[Dict[str, Any]]:
+    def detect_and_propose_improvements(self) -> list[dict[str, Any]]:
         """Analyze persistent task/experience history and generate ImprovementProposals."""
         proposals = self.improvement_engine.detect_and_propose()
         return [p.to_dict() for p in proposals]
 
     def list_improvement_proposals(
-        self, status: Optional[ImprovementStatus | str] = None
-    ) -> List[Dict[str, Any]]:
+        self, status: ImprovementStatus | str | None = None
+    ) -> list[dict[str, Any]]:
         """List persisted ImprovementProposals ordered by priority."""
         proposals = self.improvement_engine.list_prioritized_proposals(status=status)
         return [p.to_dict() for p in proposals]
 
-    def run_controlled_self_improvement(self, proposal_id: str) -> Dict[str, Any]:
+    def run_controlled_self_improvement(self, proposal_id: str) -> dict[str, Any]:
         """
         Execute controlled, bounded self-improvement for a proposal with Verification,
         Live Run Testing, security boundary enforcement, and automatic rollback on failure.
@@ -915,11 +918,11 @@ class Agent911Orchestrator:
         run_record = self.improvement_engine.apply_and_evaluate(proposal_id)
         return run_record.to_dict()
 
-    def list_self_improvement_runs(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_self_improvement_runs(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return persisted controlled self-improvement run records."""
         return self.memory_store.list_self_improvement_runs(limit=limit)
 
-    def distill_instruction(self, raw_text: str) -> Dict[str, Any]:
+    def distill_instruction(self, raw_text: str) -> dict[str, Any]:
         """
         Distill messy, informal, or unstructured user writings into a concrete
         DistilledBuildSpec dictionary identifying what the user wants to build.

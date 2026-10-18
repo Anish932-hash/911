@@ -7,7 +7,7 @@ import inspect
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.config import AgentConfig
@@ -23,7 +23,7 @@ class CapabilityRegistry:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self._capabilities: Dict[str, Capability] = {}
+        self._capabilities: dict[str, Capability] = {}
 
     def register(self, capability: Capability, allow_replace: bool = True) -> None:
         """Register a working Capability instance after checking its contract."""
@@ -76,7 +76,7 @@ class CapabilityRegistry:
             )
         self._capabilities[capability.identifier] = capability
 
-    def get(self, identifier: str) -> Optional[Capability]:
+    def get(self, identifier: str) -> Capability | None:
         """Look up a registered capability by identifier."""
         return self._capabilities.get(identifier)
 
@@ -90,9 +90,9 @@ class CapabilityRegistry:
             return CapabilityAvailability.NOT_IMPLEMENTED
         return cap.check_availability(self.config)
 
-    def list_capabilities(self, only_available: bool = False) -> List[Dict[str, Any]]:
+    def list_capabilities(self, only_available: bool = False) -> list[dict[str, Any]]:
         """List all registered capabilities with their metadata and availability."""
-        items: List[Dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
         for ident in sorted(self._capabilities.keys()):
             cap = self._capabilities[ident]
             avail = cap.check_availability(self.config)
@@ -101,13 +101,13 @@ class CapabilityRegistry:
             items.append(cap.describe(self.config))
         return items
 
-    def find_capabilities(self, query: str) -> List[Dict[str, Any]]:
+    def find_capabilities(self, query: str) -> list[dict[str, Any]]:
         """Search registered capabilities by keyword against identifier, name, and purpose."""
         q_lower = query.lower().strip()
         if not q_lower:
             return self.list_capabilities()
         tokens = [t for t in q_lower.split() if t]
-        scored: List[tuple[int, Dict[str, Any]]] = []
+        scored: list[tuple[int, dict[str, Any]]] = []
         for cap in self._capabilities.values():
             desc = cap.describe(self.config)
             haystack = f"{cap.identifier} {cap.name} {cap.purpose}".lower()
@@ -125,7 +125,7 @@ class CapabilityRegistry:
     def invoke(
         self,
         identifier: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         context: CapabilityContext,
     ) -> CapabilityResult:
         """
@@ -195,7 +195,7 @@ class CapabilityRegistry:
     def load_capability_from_module(
         self,
         module_path: str | Path,
-        class_name: Optional[str] = None,
+        class_name: str | None = None,
         verified: bool = False,
         live_tested: bool = False,
         register_now: bool = True,

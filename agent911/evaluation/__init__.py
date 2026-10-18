@@ -4,4 +4,4 @@ from agent911.evaluation.classifier import OutcomeClassifier
 from agent911.evaluation.live_testing import LiveRunTester
 from agent911.evaluation.verification import Verifier
 
-__all__ = ["Verifier", "LiveRunTester", "OutcomeClassifier"]
+__all__ = ["LiveRunTester", "OutcomeClassifier", "Verifier"]

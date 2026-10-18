@@ -10,9 +10,10 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Tuple
 from urllib.parse import urlsplit
 
 from agent911.config import (
@@ -45,9 +46,9 @@ class ModelProviderError(RuntimeError):
         self,
         message: str,
         error_type: str = "provider_error",
-        status_code: Optional[int] = None,
+        status_code: int | None = None,
         retryable: bool = False,
-        cause: Optional[BaseException] = None,
+        cause: BaseException | None = None,
     ) -> None:
         super().__init__(message)
         self.error_type = error_type
@@ -84,8 +85,8 @@ class ModelResponse:
     """Structured response returned by the AI model interface."""
 
     content: str
-    structured_data: Optional[Dict[str, Any]] = None
-    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    structured_data: dict[str, Any] | None = None
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     provider: str = ""
     model_id: str = ""
     profile_id: str = ""
@@ -94,7 +95,7 @@ class ModelResponse:
     used_fallback_model: bool = False
     retry_attempts: int = 0
     latency_ms: float = 0.0
-    usage: Dict[str, Any] = field(default_factory=dict)
+    usage: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -115,13 +116,13 @@ class ConnectivityReport:
     latency_ms: float = 0.0
     config_valid: bool = True
     endpoint_reachable: bool = False
-    auth_valid: Optional[bool] = None
-    model_accepted: Optional[bool] = None
+    auth_valid: bool | None = None
+    model_accepted: bool | None = None
     inference_succeeded: bool = False
     conclusive: bool = False
-    error_category: Optional[str] = None
+    error_category: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status.value,
             "provider": self.provider,
@@ -141,7 +142,7 @@ class ConnectivityReport:
         }
 
 
-def extract_json_object(text: str) -> Dict[str, Any]:
+def extract_json_object(text: str) -> dict[str, Any]:
     """Extract and parse a JSON object from raw model text or fenced markdown blocks."""
     cleaned = text.strip()
     if not cleaned:
@@ -205,16 +206,16 @@ class ProviderAdapter(ABC):
         model_cfg: ModelConfig,
         system_prompt: str,
         user_prompt: str,
-        api_key: Optional[str],
+        api_key: str | None,
         expect_json: bool,
-    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+    ) -> Tuple[str, dict[str, str], dict[str, Any]]:
         """Return (endpoint_url, headers_dict, json_body_dict)."""
         raise NotImplementedError
 
     @abstractmethod
     def parse_http_response(
-        self, payload: Dict[str, Any]
-    ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> Tuple[str, list[dict[str, Any]], dict[str, Any]]:
         """Return (content_text, tool_calls, usage_dict)."""
         raise NotImplementedError
 
@@ -228,15 +229,15 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         model_cfg: ModelConfig,
         system_prompt: str,
         user_prompt: str,
-        api_key: Optional[str],
+        api_key: str | None,
         expect_json: bool,
-    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
-        headers: Dict[str, str] = {"Content-Type": "application/json"}
+    ) -> Tuple[str, dict[str, str], dict[str, Any]]:
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if model_cfg.custom_headers:
             headers.update(model_cfg.custom_headers)
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        body: Dict[str, Any] = {
+        body: dict[str, Any] = {
             "model": model_cfg.model_id,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -250,8 +251,8 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         return model_cfg.endpoint, headers, body
 
     def parse_http_response(
-        self, payload: Dict[str, Any]
-    ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> Tuple[str, list[dict[str, Any]], dict[str, Any]]:
         choices = payload.get("choices") if isinstance(payload, dict) else None
         if not choices or not isinstance(choices, list):
             raise ModelProviderError(
@@ -274,10 +275,10 @@ class AnthropicAdapter(ProviderAdapter):
         model_cfg: ModelConfig,
         system_prompt: str,
         user_prompt: str,
-        api_key: Optional[str],
+        api_key: str | None,
         expect_json: bool,
-    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
-        headers: Dict[str, str] = {
+    ) -> Tuple[str, dict[str, str], dict[str, Any]]:
+        headers: dict[str, str] = {
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
         }
@@ -285,7 +286,7 @@ class AnthropicAdapter(ProviderAdapter):
             headers.update(model_cfg.custom_headers)
         if api_key:
             headers["x-api-key"] = api_key
-        body: Dict[str, Any] = {
+        body: dict[str, Any] = {
             "model": model_cfg.model_id,
             "system": system_prompt,
             "messages": [{"role": "user", "content": user_prompt}],
@@ -295,16 +296,16 @@ class AnthropicAdapter(ProviderAdapter):
         return model_cfg.endpoint, headers, body
 
     def parse_http_response(
-        self, payload: Dict[str, Any]
-    ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> Tuple[str, list[dict[str, Any]], dict[str, Any]]:
         blocks = payload.get("content") if isinstance(payload, dict) else None
         if not blocks or not isinstance(blocks, list):
             raise ModelProviderError(
                 "Anthropic response missing 'content' blocks.",
                 error_type="invalid_response",
             )
-        text_parts: List[str] = []
-        tool_calls: List[Dict[str, Any]] = []
+        text_parts: list[str] = []
+        tool_calls: list[dict[str, Any]] = []
         for blk in blocks:
             if isinstance(blk, dict):
                 if blk.get("type") == "text":
@@ -324,13 +325,13 @@ class OllamaAdapter(ProviderAdapter):
         model_cfg: ModelConfig,
         system_prompt: str,
         user_prompt: str,
-        api_key: Optional[str],
+        api_key: str | None,
         expect_json: bool,
-    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
-        headers: Dict[str, str] = {"Content-Type": "application/json"}
+    ) -> Tuple[str, dict[str, str], dict[str, Any]]:
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if model_cfg.custom_headers:
             headers.update(model_cfg.custom_headers)
-        body: Dict[str, Any] = {
+        body: dict[str, Any] = {
             "model": model_cfg.model_id,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -343,8 +344,8 @@ class OllamaAdapter(ProviderAdapter):
         return model_cfg.endpoint, headers, body
 
     def parse_http_response(
-        self, payload: Dict[str, Any]
-    ) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> Tuple[str, list[dict[str, Any]], dict[str, Any]]:
         msg = payload.get("message") if isinstance(payload, dict) else None
         if not isinstance(msg, dict) or "content" not in msg:
             raise ModelProviderError(
@@ -361,7 +362,7 @@ class OllamaAdapter(ProviderAdapter):
         return content_text, tool_calls, usage
 
 
-_ADAPTER_REGISTRY: Dict[str, Type[ProviderAdapter]] = {
+_ADAPTER_REGISTRY: dict[str, type[ProviderAdapter]] = {
     "openai_compatible": OpenAICompatibleAdapter,
     "anthropic": AnthropicAdapter,
     "ollama": OllamaAdapter,
@@ -369,7 +370,7 @@ _ADAPTER_REGISTRY: Dict[str, Type[ProviderAdapter]] = {
 
 
 def register_provider_adapter(
-    adapter_type: str, adapter_cls: Type[ProviderAdapter]
+    adapter_type: str, adapter_cls: type[ProviderAdapter]
 ) -> None:
     """Register a custom ProviderAdapter class for extending provider support."""
     if not issubclass(adapter_cls, ProviderAdapter):
@@ -377,7 +378,7 @@ def register_provider_adapter(
     _ADAPTER_REGISTRY[adapter_type] = adapter_cls
 
 
-def get_provider_adapter(adapter_type: str) -> Optional[ProviderAdapter]:
+def get_provider_adapter(adapter_type: str) -> ProviderAdapter | None:
     cls = _ADAPTER_REGISTRY.get(adapter_type)
     return cls() if cls is not None else None
 
@@ -399,19 +400,17 @@ class ModelInterface:
         self,
         config: ModelConfig,
         max_context_chars: int = 16000,
-        deterministic_responder: Optional[
-            Callable[[str, Dict[str, Any]], str | Dict[str, Any]]
-        ] = None,
-        credential_store: Optional[CredentialStore] = None,
-        agent_config: Optional[AgentConfig] = None,
+        deterministic_responder: Callable[[str, dict[str, Any]], str | dict[str, Any]] | None = None,
+        credential_store: CredentialStore | None = None,
+        agent_config: AgentConfig | None = None,
     ) -> None:
         self.config = config
         self.max_context_chars = max_context_chars
         self.deterministic_responder = deterministic_responder
         self.credential_store = credential_store
         self.agent_config = agent_config
-        self._cache: Dict[str, ModelResponse] = {}
-        self.last_error: Optional[str] = None
+        self._cache: dict[str, ModelResponse] = {}
+        self.last_error: str | None = None
 
     def switch_active_model(
         self, profile_id: str, set_as_default: bool = False
@@ -429,7 +428,7 @@ class ModelInterface:
         return self.config
 
     def check_connectivity(
-        self, target_profile_id: Optional[str] = None
+        self, target_profile_id: str | None = None
     ) -> ConnectivityReport:
         """
         Perform a genuine connection test against the active or specified model profile.
@@ -686,14 +685,14 @@ class ModelInterface:
         self,
         system_prompt: str,
         user_prompt: str,
-        context_payload: Optional[Dict[str, Any]] = None,
+        context_payload: dict[str, Any] | None = None,
         expect_json: bool = False,
         use_cache: bool = True,
-        model_profile_override: Optional[str] = None,
+        model_profile_override: str | None = None,
         require_tool_calling: bool = False,
         require_streaming: bool = False,
         input_type: str = "text",
-        cancel_event: Optional[threading.Event] = None,
+        cancel_event: threading.Event | None = None,
     ) -> ModelResponse:
         """
         Send a request to the configured AI model (or deterministic test double).
@@ -734,9 +733,7 @@ class ModelInterface:
             combined_user = combined_user[:effective_max_chars]
 
         cache_key = hashlib.sha256(
-            f"{active_cfg.provider}:{active_cfg.model_id}:{system_prompt}:{combined_user}:{expect_json}".encode(
-                "utf-8"
-            )
+            f"{active_cfg.provider}:{active_cfg.model_id}:{system_prompt}:{combined_user}:{expect_json}".encode()
         ).hexdigest()
 
         if use_cache and cache_key in self._cache:
@@ -788,10 +785,10 @@ class ModelInterface:
         model_cfg: ModelConfig,
         system_prompt: str,
         combined_user: str,
-        context_payload: Optional[Dict[str, Any]],
+        context_payload: dict[str, Any] | None,
         user_prompt: str,
         expect_json: bool,
-        cancel_event: Optional[threading.Event],
+        cancel_event: threading.Event | None,
     ) -> ModelResponse:
         if model_cfg.provider == "deterministic" or self.deterministic_responder is not None:
             if self.deterministic_responder is None:
@@ -843,7 +840,7 @@ class ModelInterface:
                 retryable=False,
             )
 
-        last_error: Optional[ModelProviderError] = None
+        last_error: ModelProviderError | None = None
         attempts = model_cfg.max_retries + 1
         for attempt in range(attempts):
             if cancel_event is not None and cancel_event.is_set():
@@ -872,7 +869,7 @@ class ModelInterface:
         model_cfg: ModelConfig,
         system_prompt: str,
         user_prompt: str,
-        api_key: Optional[str],
+        api_key: str | None,
         expect_json: bool,
     ) -> Tuple[ModelResponse, int]:
         adapter = get_provider_adapter(model_cfg.provider)
@@ -991,7 +988,7 @@ class ModelInterface:
 
         content_text, tool_calls, usage = adapter.parse_http_response(payload)
 
-        structured: Optional[Dict[str, Any]] = None
+        structured: dict[str, Any] | None = None
         if expect_json:
             structured = extract_json_object(content_text)
 
@@ -1015,9 +1012,9 @@ class ModelInterface:
         self,
         model_cfg: ModelConfig,
         endpoint_url: str,
-        headers: Dict[str, str],
-        body: Dict[str, Any],
-        api_key: Optional[str],
+        headers: dict[str, str],
+        body: dict[str, Any],
+        api_key: str | None,
         adapter: ProviderAdapter,
         expect_json: bool,
     ) -> Tuple[ModelResponse, int]:

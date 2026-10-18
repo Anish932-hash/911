@@ -1,15 +1,14 @@
 {
-  "name": "agent911-ui",
+  "name": "agent911-cli",
   "version": "0.1.0",
-  "description": "Node.js Chat & Execution Interface for Agent 911",
-  "main": "ui/server.js",
+  "description": "Agent 911 — Windows & Cross-Platform Instruction-Driven AI Agent CLI",
+  "main": "main.py",
   "scripts": {
-    "start": "node ui/server.js",
-    "dev": "node ui/server.js",
-    "test": "node --test ui/test_ui.js"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "start": "python3 main.py",
+    "dev": "python3 main.py",
+    "build": "python3 -m py_compile main.py",
+    "lint": "python3 -m unittest discover -s tests",
+    "test": "python3 -m unittest discover -s tests -v"
   },
   "license": "MIT"
 }

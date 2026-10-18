@@ -5,14 +5,13 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
-from agent911.models import CapabilityAvailability, DistilledBuildSpec
-
+from agent911.models import CapabilityAvailability, CapabilityResult, DistilledBuildSpec
 
 # Conversational filler, hesitation markers, and informal hedging tokens
-_FILLER_PATTERNS: List[Tuple[str, re.Pattern[str]]] = [
+_FILLER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("uhh/umm", re.compile(r"\b(?:uh+|um+|hmm+|er+|ah+)\b", re.IGNORECASE)),
     ("hey/yo", re.compile(r"^\s*(?:hey+|yo+|hi+|hello+|sup)\b[,!\.\s]*", re.IGNORECASE)),
     ("so like", re.compile(r"\b(?:so\s+like|like\s+basically|basically|honestly|literally)\b", re.IGNORECASE)),
@@ -23,7 +22,7 @@ _FILLER_PATTERNS: List[Tuple[str, re.Pattern[str]]] = [
 ]
 
 # Typos and shorthand normalizations for messy text analysis
-_TYPO_MAP: Dict[str, str] = {
+_TYPO_MAP: dict[str, str] = {
     "pyhton": "python",
     "pyton": "python",
     "phyton": "python",
@@ -122,8 +121,8 @@ class InstructionDistiller:
                 concrete_instruction="",
             )
 
-        noise_filtered: List[str] = []
-        ambiguities_resolved: List[str] = []
+        noise_filtered: list[str] = []
+        ambiguities_resolved: list[str] = []
 
         # 1. Detect filler / informal markers
         for label, pattern in _FILLER_PATTERNS:
@@ -198,8 +197,8 @@ class InstructionDistiller:
         )
 
         # 8. Build concrete steps and concrete instruction
-        concrete_steps: List[str] = []
-        dirs_to_create: List[str] = []
+        concrete_steps: list[str] = []
+        dirs_to_create: list[str] = []
         if target_dir and target_dir not in dirs_to_create:
             dirs_to_create.append(target_dir)
         for art in target_artifacts:
@@ -210,7 +209,7 @@ class InstructionDistiller:
         for d in dirs_to_create:
             concrete_steps.append(f"Ensure directory '{d}' exists in workspace.")
 
-        artifact_summaries: List[str] = []
+        artifact_summaries: list[str] = []
         for art in target_artifacts:
             path = art["path"]
             atype = art["artifact_type"]
@@ -323,7 +322,7 @@ class InstructionDistiller:
         has_build_verb = bool(_BUILD_VERB_RE.search(lower))
         has_artifact_noun = bool(_ARTIFACT_NOUN_RE.search(lower))
         has_file_ext = bool(
-            re.search(r"\b[a-zA-Z0-9_\-\./]+\.(?:py|json|md|txt|sh|yaml|yml|toml|csv)\b", text)
+            re.search(r"\b[a-zA-Z0-9_\-\./\\]+\.(?:py|json|md|txt|sh|yaml|yml|toml|csv)\b", text)
         )
 
         if has_build_verb and (has_artifact_noun or has_file_ext):
@@ -339,8 +338,8 @@ class InstructionDistiller:
 
     @classmethod
     def _extract_target_directory(
-        cls, text: str, ambiguities_resolved: List[str]
-    ) -> Optional[str]:
+        cls, text: str, ambiguities_resolved: list[str]
+    ) -> str | None:
         # Pattern 1: "in <name>/ folder" or "in <name> folder/directory/dir"
         m1 = re.search(
             r"\b(?:in|inside|into|under)\s+(?:the\s+|a\s+)?['\"`]?([a-zA-Z0-9_\-]+?)/?['\"`]?\s+(?:folder|directory|dir)\b",
@@ -367,10 +366,10 @@ class InstructionDistiller:
 
     @classmethod
     def _extract_functions_and_features(
-        cls, text: str, ambiguities_resolved: List[str]
-    ) -> Tuple[List[str], List[str]]:
-        functions: List[str] = []
-        features: List[str] = []
+        cls, text: str, ambiguities_resolved: list[str]
+    ) -> tuple[list[str], list[str]]:
+        functions: list[str] = []
+        features: list[str] = []
 
         # 1. Code block function definitions
         for fn in re.findall(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", text):
@@ -481,12 +480,12 @@ class InstructionDistiller:
     def _extract_or_infer_artifacts(
         cls,
         text: str,
-        target_dir: Optional[str],
-        extracted_functions: List[str],
-        extracted_features: List[str],
-        ambiguities_resolved: List[str],
-    ) -> List[Dict[str, Any]]:
-        artifacts: List[Dict[str, Any]] = []
+        target_dir: str | None,
+        extracted_functions: list[str],
+        extracted_features: list[str],
+        ambiguities_resolved: list[str],
+    ) -> list[dict[str, Any]]:
+        artifacts: list[dict[str, Any]] = []
         seen_paths: set[str] = set()
         lower = text.lower()
 
@@ -495,9 +494,9 @@ class InstructionDistiller:
             artifact_type: str,
             inferred_ext: bool = False,
             synthesized_name: bool = False,
-            fns: Optional[List[str]] = None,
+            fns: list[str] | None = None,
         ) -> None:
-            clean_p = raw_path.strip(" '\"`.,;!?")
+            clean_p = raw_path.strip(" '\"`.,;!?").replace("\\", "/").lstrip("/")
             if not clean_p:
                 return
             # Apply target_dir if path has no directory component and target_dir was specified
@@ -509,7 +508,7 @@ class InstructionDistiller:
             if clean_p in seen_paths:
                 return
             seen_paths.add(clean_p)
-            parent_d = str(Path(clean_p).parent)
+            parent_d = Path(clean_p).parent.as_posix()
             artifacts.append(
                 {
                     "path": clean_p,
@@ -523,7 +522,7 @@ class InstructionDistiller:
 
         # 1. Explicit filenames with extensions (.py, .json, .md, .txt, .sh, .yaml, .yml, .toml, .csv)
         ext_matches = re.findall(
-            r"(?:['\"`])([a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+)(?:['\"`])|\b([a-zA-Z0-9_\-\./]+\.(?:py|txt|md|json|csv|toml|yaml|yml|sh|log))\b",
+            r"(?:['\"`])([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)(?:['\"`])|\b([a-zA-Z0-9_\-\./\\]+\.(?:py|txt|md|json|csv|toml|yaml|yml|sh|log))\b",
             text,
         )
         for m1, m2 in ext_matches:
@@ -533,10 +532,10 @@ class InstructionDistiller:
             atype = cls._classify_path_type(cand)
             fns = extracted_functions if atype == "python_module" else []
             # If user explicitly wrote a relative path with '/', keep it as-is
-            clean_p = cand.strip(" '\"`.,;!?")
+            clean_p = cand.strip(" '\"`.,;!?").replace("\\", "/")
             if clean_p not in seen_paths:
                 seen_paths.add(clean_p)
-                parent_d = str(Path(clean_p).parent)
+                parent_d = Path(clean_p).parent.as_posix()
                 artifacts.append(
                     {
                         "path": clean_p,
@@ -698,7 +697,7 @@ class InstructionDistiller:
 
     @staticmethod
     def _synthesize_module_name_from_topic(
-        lower: str, extracted_functions: List[str]
+        lower: str, extracted_functions: list[str]
     ) -> str:
         # Look for "<noun> <artifact_noun>" e.g. "password generator", "todo tracker", "price calculator", "email validator"
         topic_m = re.search(
@@ -730,19 +729,19 @@ class InstructionDistiller:
     @classmethod
     def synthesize_python_module(
         cls,
-        artifact: Dict[str, Any],
+        artifact: dict[str, Any],
         raw_instruction: str,
-    ) -> Tuple[str, List[str]]:
+    ) -> tuple[str, list[str]]:
         """
         Synthesize a complete, compiling, runnable Python module implementing all
         functions requested or inferred from the user's writing.
         """
         target_file = artifact["path"]
-        functions: List[str] = list(artifact.get("functions") or [])
+        functions: list[str] = list(artifact.get("functions") or [])
         if not functions:
             functions = ["run_task"]
 
-        lines: List[str] = [
+        lines: list[str] = [
             f'"""Generated module {target_file} built by Agent 911."""',
             "",
             "from __future__ import annotations",
@@ -765,13 +764,13 @@ class InstructionDistiller:
         return "\n".join(lines), functions
 
     @staticmethod
-    def _synthesize_function_body(fn_name: str) -> List[str]:
+    def _synthesize_function_body(fn_name: str) -> list[str]:
         low = fn_name.lower()
 
         if "fibonacci" in low or low == "fib":
             return [
                 f"def {fn_name}(n: int = 7) -> int:",
-                f'    """Compute nth Fibonacci number."""',
+                '    """Compute nth Fibonacci number."""',
                 "    if n <= 0:",
                 "        return 0",
                 "    if n == 1:",
@@ -784,37 +783,37 @@ class InstructionDistiller:
         if "tax" in low:
             return [
                 f"def {fn_name}(amount: float = 100.0, rate: float = 0.15) -> float:",
-                f'    """Calculate tax amount for a base price."""',
+                '    """Calculate tax amount for a base price."""',
                 "    return round(float(amount) * float(rate), 2)",
             ]
         if "discount" in low:
             return [
                 f"def {fn_name}(amount: float = 100.0, discount_pct: float = 0.10) -> float:",
-                f'    """Calculate discounted price."""',
+                '    """Calculate discounted price."""',
                 "    return round(float(amount) * (1.0 - float(discount_pct)), 2)",
             ]
         if low.startswith("add") or "sum" in low:
             return [
                 f"def {fn_name}(a: float = 10, b: float = 5) -> float:",
-                f'    """Add two numeric values."""',
+                '    """Add two numeric values."""',
                 "    return a + b",
             ]
         if low.startswith("subtract") or "diff" in low:
             return [
                 f"def {fn_name}(a: float = 10, b: float = 5) -> float:",
-                f'    """Subtract b from a."""',
+                '    """Subtract b from a."""',
                 "    return a - b",
             ]
         if low.startswith("multiply") or "product" in low:
             return [
                 f"def {fn_name}(a: float = 6, b: float = 7) -> float:",
-                f'    """Multiply two numeric values."""',
+                '    """Multiply two numeric values."""',
                 "    return a * b",
             ]
         if low.startswith("divide"):
             return [
                 f"def {fn_name}(a: float = 20, b: float = 4) -> float:",
-                f'    """Safely divide a by b."""',
+                '    """Safely divide a by b."""',
                 "    if b == 0:",
                 "        return 0.0",
                 "    return a / b",
@@ -822,14 +821,14 @@ class InstructionDistiller:
         if "password" in low or "passgen" in low:
             return [
                 f"def {fn_name}(length: int = 12) -> str:",
-                f'    """Generate a deterministic-safe alphanumeric password of given length."""',
+                '    """Generate a deterministic-safe alphanumeric password of given length."""',
                 '    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%"',
                 "    return ''.join(alphabet[(i * 7 + 3) % len(alphabet)] for i in range(max(4, int(length))))",
             ]
         if "strength" in low:
             return [
                 f'def {fn_name}(value: str = "Secur3#Pass99") -> dict:',
-                f'    """Evaluate password strength metrics."""',
+                '    """Evaluate password strength metrics."""',
                 "    has_upper = any(c.isupper() for c in value)",
                 "    has_digit = any(c.isdigit() for c in value)",
                 "    score = (1 if len(value) >= 8 else 0) + (1 if has_upper else 0) + (1 if has_digit else 0)",
@@ -838,14 +837,14 @@ class InstructionDistiller:
         if "validate" in low or "check" in low or "verify" in low:
             return [
                 f'def {fn_name}(payload: object = "valid_sample") -> dict:',
-                f'    """Validate input payload and return validation status."""',
+                '    """Validate input payload and return validation status."""',
                 "    is_valid = payload is not None and str(payload).strip() != ''",
                 f'    return {{"validator": "{fn_name}", "valid": is_valid, "value": payload}}',
             ]
         if "greet" in low:
             return [
                 f'def {fn_name}(name: str = "World") -> str:',
-                f'    """Return a friendly greeting string."""',
+                '    """Return a friendly greeting string."""',
                 '    return f"Hello, {name}!"',
             ]
 
@@ -858,8 +857,8 @@ class InstructionDistiller:
     @classmethod
     def synthesize_python_test(
         cls,
-        test_artifact: Dict[str, Any],
-        module_artifact: Dict[str, Any],
+        test_artifact: dict[str, Any],
+        module_artifact: dict[str, Any],
     ) -> str:
         """
         Synthesize a runnable unittest module that loads the generated Python module
@@ -869,7 +868,7 @@ class InstructionDistiller:
         mod_stem = Path(mod_path).stem
         functions = module_artifact.get("functions") or ["run_task"]
 
-        lines: List[str] = [
+        lines: list[str] = [
             f'"""Automated unit tests for {mod_path} generated by Agent 911."""',
             "",
             "import importlib.util",
@@ -877,7 +876,7 @@ class InstructionDistiller:
             "import unittest",
             "",
             "",
-            f"def _load_target_module():",
+            "def _load_target_module():",
             f'    mod_file = Path("{mod_path}")',
             "    if not mod_file.exists():",
             f'        mod_file = Path(__file__).resolve().parent / "{Path(mod_path).name}"',
@@ -914,10 +913,10 @@ class InstructionDistiller:
     @classmethod
     def synthesize_json_config(
         cls,
-        artifact: Dict[str, Any],
+        artifact: dict[str, Any],
         spec: DistilledBuildSpec,
     ) -> str:
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "status": "ok",
             "artifact": artifact["path"],
             "built_for": spec.what_user_wants_to_build,
@@ -935,10 +934,10 @@ class InstructionDistiller:
     @classmethod
     def synthesize_markdown_doc(
         cls,
-        artifact: Dict[str, Any],
+        artifact: dict[str, Any],
         spec: DistilledBuildSpec,
     ) -> str:
-        lines: List[str] = [
+        lines: list[str] = [
             f"# {spec.what_user_wants_to_build}",
             "",
             "## Concrete Specification",
@@ -979,17 +978,36 @@ class DistillInstructionCapability(Capability):
             }
         },
     }
+    output_format = {
+        "what_user_wants_to_build": "str",
+        "concrete_instruction": "str",
+        "concrete_steps": "list[str]",
+        "target_artifacts": "list[dict]",
+        "extracted_functions": "list[str]",
+        "ambiguities_resolved": "list[str]",
+    }
     output_description = (
         "Dictionary containing what_user_wants_to_build, concrete_instruction, "
         "concrete_steps, target_artifacts, extracted_functions, and ambiguities_resolved."
     )
 
-    def check_availability(self, config: Optional[Any] = None) -> CapabilityAvailability:
+    def check_availability(self, config: Any | None = None) -> CapabilityAvailability:
         return CapabilityAvailability.AVAILABLE
 
     def execute(
-        self, parameters: Dict[str, Any], context: CapabilityContext
-    ) -> Dict[str, Any]:
-        raw_text = str(parameters.get("text") or "").strip()
+        self, params: dict[str, Any], context: CapabilityContext
+    ) -> CapabilityResult:
+        raw_text = str(params.get("text") or params.get("instruction") or "").strip()
+        if not raw_text:
+            return CapabilityResult(
+                capability_id=self.identifier,
+                success=False,
+                error="Parameter 'text' must be a non-empty string.",
+                error_type="InputValidationError",
+            )
         spec = InstructionDistiller.distill(raw_text)
-        return spec.to_dict()
+        return CapabilityResult(
+            capability_id=self.identifier,
+            success=True,
+            data=spec.to_dict(),
+        )

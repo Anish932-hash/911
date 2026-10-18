@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import importlib
+import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.models import CapabilityAvailability, CapabilityResult
@@ -64,7 +64,7 @@ class WebSearchCapability(Capability):
                 return name, providers[name]
         return None
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         query = str(params.get("query", "")).strip()
         if not query:
             return CapabilityResult(

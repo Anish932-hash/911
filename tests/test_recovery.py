@@ -9,7 +9,6 @@ from pathlib import Path
 from agent911.capabilities import CapabilityContext
 from agent911.config import AgentConfig
 from agent911.models import (
-    ActionStatus,
     CapabilityResult,
     ExecutionErrorRecord,
     PlannedAction,

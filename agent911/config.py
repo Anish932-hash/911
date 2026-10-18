@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import re
 import stat
-import csv
 import subprocess
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 
@@ -21,9 +21,9 @@ class ConfigurationError(ValueError):
     def __init__(
         self,
         message: str,
-        cause: Optional[str] = None,
+        cause: str | None = None,
         changes_applied: bool = False,
-        next_step: Optional[str] = None,
+        next_step: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -31,7 +31,7 @@ class ConfigurationError(ValueError):
         self.changes_applied = changes_applied
         self.next_step = next_step or "Inspect configuration values and retry."
 
-    def to_actionable_dict(self) -> Dict[str, Any]:
+    def to_actionable_dict(self) -> dict[str, Any]:
         return {
             "what_failed": self.message,
             "known_cause": self.cause,
@@ -58,7 +58,7 @@ SUPPORTED_ADAPTER_TYPES = {
 }
 
 
-def atomic_write_text(target_path: Path, content: str, mode: Optional[int] = None) -> None:
+def atomic_write_text(target_path: Path, content: str, mode: int | None = None) -> None:
     """Atomically write text to target_path using a temporary file in the same directory."""
     target_path = target_path.resolve()
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,24 +90,40 @@ def atomic_write_text(target_path: Path, content: str, mode: Optional[int] = Non
 
 def _restrict_file_to_current_windows_user(path: Path) -> None:
     """Remove inherited file ACLs and grant full access only to the current user."""
-    identity = subprocess.run(
-        ["whoami", "/user", "/fo", "csv", "/nh"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    rows = list(csv.reader(identity.stdout.splitlines()))
-    sid = next((row[1].strip() for row in rows if len(row) > 1 and row[1].strip()), None)
-    if not sid or not sid.startswith("S-"):
-        raise OSError("Could not determine the current Windows user SID for credential protection.")
+    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    principal: str | None = None
+    try:
+        identity = subprocess.run(
+            ["whoami", "/user", "/fo", "csv", "/nh"],
+            check=True,
+            capture_output=True,
+            text=True,
+            creationflags=no_window,
+        )
+        rows = list(csv.reader(identity.stdout.splitlines()))
+        sid = next((row[1].strip() for row in rows if len(row) > 1 and row[1].strip()), None)
+        if sid and sid.startswith("S-"):
+            principal = f"*{sid}"
+    except (OSError, subprocess.SubprocessError):
+        principal = None
+
+    if not principal:
+        username = os.environ.get("USERNAME", "").strip()
+        domain = os.environ.get("USERDOMAIN", "").strip()
+        if username:
+            principal = f"{domain}\\{username}" if domain else username
+
+    if not principal:
+        raise OSError("Could not determine the current Windows user SID or account for credential protection.")
 
     # Windows chmod only toggles the read-only attribute; use the native ACL tool for
     # the private credential-vault semantics intended by mode 0600.
     subprocess.run(
-        ["icacls", str(path), "/inheritance:r", "/grant:r", f"*{sid}:F", "/q"],
+        ["icacls", str(path), "/inheritance:r", "/grant:r", f"{principal}:F", "/q"],
         check=True,
         capture_output=True,
         text=True,
+        creationflags=no_window,
     )
 
 
@@ -134,7 +150,7 @@ def validate_endpoint_url(endpoint: str) -> None:
         )
 
 
-def mask_secret_preview(secret: Optional[str]) -> Optional[str]:
+def mask_secret_preview(secret: str | None) -> str | None:
     """Return a heavily masked preview of a secret without exposing its value."""
     if not secret:
         return None
@@ -143,7 +159,7 @@ def mask_secret_preview(secret: Optional[str]) -> Optional[str]:
     return f"{secret[:3]}...{secret[-2:]}"
 
 
-def redact_secrets(value: Any, explicit_secrets: Optional[List[str]] = None) -> Any:
+def redact_secrets(value: Any, explicit_secrets: list[str] | None = None) -> Any:
     """Recursively redact sensitive tokens and API keys from strings, dicts, and lists."""
     if value is None:
         return None
@@ -160,7 +176,7 @@ def redact_secrets(value: Any, explicit_secrets: Optional[List[str]] = None) -> 
         redacted = _SECRET_PATTERNS[5].sub(r"\1[REDACTED]\3", redacted)
         return redacted
     if isinstance(value, dict):
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         for k, v in value.items():
             k_lower = str(k).lower()
             if any(
@@ -194,7 +210,7 @@ class CredentialStore:
     def __init__(self, vault_path: Path) -> None:
         self.vault_path = vault_path.resolve()
 
-    def _load_vault(self) -> Dict[str, str]:
+    def _load_vault(self) -> dict[str, str]:
         if not self.vault_path.exists():
             return {}
         try:
@@ -235,9 +251,9 @@ class CredentialStore:
     def resolve_credential(
         self,
         provider_id: str,
-        api_key_env: Optional[str] = None,
-        inline_api_key: Optional[str] = None,
-    ) -> Tuple[Optional[str], str]:
+        api_key_env: str | None = None,
+        inline_api_key: str | None = None,
+    ) -> tuple[str | None, str]:
         """
         Resolve credential for a provider and return (secret, source).
         Priority: inline override -> provider vault -> specific env var -> standard fallback env vars.
@@ -245,7 +261,7 @@ class CredentialStore:
         if inline_api_key:
             return inline_api_key, "inline_config"
         vault = self._load_vault()
-        if provider_id in vault and vault[provider_id]:
+        if vault.get(provider_id):
             return vault[provider_id], "credential_store"
         if api_key_env and os.environ.get(api_key_env):
             return os.environ[api_key_env], f"env:{api_key_env}"
@@ -258,7 +274,7 @@ class CredentialStore:
         vault = self._load_vault()
         return bool(vault.get(provider_id))
 
-    def get_masked_credential(self, provider_id: str) -> Optional[str]:
+    def get_masked_credential(self, provider_id: str) -> str | None:
         vault = self._load_vault()
         val = vault.get(provider_id)
         return mask_secret_preview(val) if val else None
@@ -266,9 +282,9 @@ class CredentialStore:
     def get_status(
         self,
         provider_id: str,
-        api_key_env: Optional[str] = None,
-        inline_api_key: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        api_key_env: str | None = None,
+        inline_api_key: str | None = None,
+    ) -> dict[str, Any]:
         secret, source = self.resolve_credential(provider_id, api_key_env, inline_api_key)
         return {
             "provider_id": provider_id,
@@ -278,9 +294,17 @@ class CredentialStore:
             "masked_preview": mask_secret_preview(secret),
         }
 
-    def all_known_secrets(self, inline_keys: Optional[List[str]] = None) -> List[str]:
+    def all_known_secrets(self, inline_keys: list[str] | None = None) -> list[str]:
         secrets = list(self._load_vault().values())
-        for env_name in ("AGENT911_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "BRAVE_SEARCH_API_KEY"):
+        for env_name in (
+            "AGENT911_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "GROQ_API_KEY",
+            "BRAVE_SEARCH_API_KEY",
+            "TAVILY_API_KEY",
+            "AGENT911_SEARCH_API_KEY",
+        ):
             val = os.environ.get(env_name)
             if val:
                 secrets.append(val)
@@ -297,9 +321,9 @@ class ProviderConfig:
     name: str
     adapter_type: str = "openai_compatible"
     endpoint: str = "https://api.openai.com/v1/chat/completions"
-    api_key_env: Optional[str] = "AGENT911_API_KEY"
+    api_key_env: str | None = "AGENT911_API_KEY"
     enabled: bool = True
-    custom_headers: Dict[str, str] = field(default_factory=dict)
+    custom_headers: dict[str, str] = field(default_factory=dict)
     description: str = ""
 
     def validate(self) -> None:
@@ -317,10 +341,10 @@ class ProviderConfig:
             if not isinstance(hk, str) or not isinstance(hv, str):
                 raise ConfigurationError("Provider custom_headers must map strings to strings.")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return self.to_safe_dict()
 
-    def to_safe_dict(self, cred_store: Optional[CredentialStore] = None) -> Dict[str, Any]:
+    def to_safe_dict(self, cred_store: CredentialStore | None = None) -> dict[str, Any]:
         raw = asdict(self)
         raw["custom_headers"] = redact_secrets(self.custom_headers)
         if cred_store is not None:
@@ -351,9 +375,9 @@ class ModelProfileConfig:
     name: str
     provider_id: str
     model_id: str
-    endpoint_override: Optional[str] = None
-    context_window_tokens: Optional[int] = None  # None means unknown
-    supported_inputs: List[str] = field(default_factory=lambda: ["text"])
+    endpoint_override: str | None = None
+    context_window_tokens: int | None = None  # None means unknown
+    supported_inputs: list[str] = field(default_factory=lambda: ["text"])
     supports_tool_calling: bool | str = "unknown"
     supports_structured_output: bool | str = "unknown"
     supports_streaming: bool | str = "unknown"
@@ -408,7 +432,7 @@ class ModelProfileConfig:
                 f"Model '{self.profile_id}' max_tokens must be greater than 0."
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -423,7 +447,7 @@ class ModelConfig:
     model_id: str = "gpt-4o-mini"
     endpoint: str = "https://api.openai.com/v1/chat/completions"
     api_key_env: str = "AGENT911_API_KEY"
-    api_key: Optional[str] = None
+    api_key: str | None = None
     timeout_seconds: float = 30.0
     max_retries: int = 2
     temperature: float = 0.1
@@ -431,16 +455,16 @@ class ModelConfig:
     allow_local_fallback: bool = True
     provider_id: str = "default"
     profile_id: str = "default"
-    context_window_tokens: Optional[int] = None
-    supported_inputs: List[str] = field(default_factory=lambda: ["text"])
+    context_window_tokens: int | None = None
+    supported_inputs: list[str] = field(default_factory=lambda: ["text"])
     supports_tool_calling: bool | str = "unknown"
     supports_structured_output: bool | str = "unknown"
     supports_streaming: bool | str = "unknown"
-    custom_headers: Dict[str, str] = field(default_factory=dict)
+    custom_headers: dict[str, str] = field(default_factory=dict)
 
     def resolve_api_key(
-        self, cred_store: Optional[CredentialStore] = None
-    ) -> Optional[str]:
+        self, cred_store: CredentialStore | None = None
+    ) -> str | None:
         """Resolve API key from inline config, CredentialStore, or environment variables."""
         if self.api_key:
             return self.api_key
@@ -478,7 +502,7 @@ class ModelConfig:
         if self.max_tokens <= 0:
             raise ConfigurationError("Model max_tokens must be greater than 0.")
 
-    def to_safe_dict(self, cred_store: Optional[CredentialStore] = None) -> Dict[str, Any]:
+    def to_safe_dict(self, cred_store: CredentialStore | None = None) -> dict[str, Any]:
         raw = asdict(self)
         resolved = self.resolve_api_key(cred_store)
         raw["has_credentials"] = bool(resolved)
@@ -507,21 +531,21 @@ class AgentConfig:
     max_task_duration_seconds: float = 120.0
     schema_version: int = 2
     model: ModelConfig = field(default_factory=ModelConfig)
-    providers: Dict[str, ProviderConfig] = field(default_factory=dict)
-    models: Dict[str, ModelProfileConfig] = field(default_factory=dict)
+    providers: dict[str, ProviderConfig] = field(default_factory=dict)
+    models: dict[str, ModelProfileConfig] = field(default_factory=dict)
     default_model: str = "default"
     active_model: str = "default"
-    fallback_model: Optional[str] = None
-    model_routing_rules: Dict[str, str] = field(default_factory=dict)
+    fallback_model: str | None = None
+    model_routing_rules: dict[str, str] = field(default_factory=dict)
     allow_local_fallback: bool = True
-    validation_warnings: List[str] = field(default_factory=list)
+    validation_warnings: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if isinstance(self.model, dict):
             self.model = ModelConfig(**self.model)
 
         # Convert raw provider dicts if passed
-        norm_providers: Dict[str, ProviderConfig] = {}
+        norm_providers: dict[str, ProviderConfig] = {}
         for pid, pval in (self.providers or {}).items():
             if isinstance(pval, ProviderConfig):
                 norm_providers[pid] = pval
@@ -532,7 +556,7 @@ class AgentConfig:
         self.providers = norm_providers
 
         # Convert raw model dicts if passed
-        norm_models: Dict[str, ModelProfileConfig] = {}
+        norm_models: dict[str, ModelProfileConfig] = {}
         for mid, mval in (self.models or {}).items():
             if isinstance(mval, ModelProfileConfig):
                 norm_models[mid] = mval
@@ -708,8 +732,8 @@ class AgentConfig:
 
     def add_or_update_provider(
         self,
-        provider: ProviderConfig | Dict[str, Any],
-        api_key: Optional[str] = None,
+        provider: ProviderConfig | dict[str, Any],
+        api_key: str | None = None,
     ) -> ProviderConfig:
         """Add or update a provider configuration after validating it."""
         cfg = (
@@ -743,7 +767,7 @@ class AgentConfig:
         self.credential_store.remove_credential(provider_id)
 
     def add_or_update_model(
-        self, model_profile: ModelProfileConfig | Dict[str, Any]
+        self, model_profile: ModelProfileConfig | dict[str, Any]
     ) -> ModelProfileConfig:
         """Add or update a model profile configuration after validating it."""
         cfg = (
@@ -854,19 +878,19 @@ class AgentConfig:
     def select_model_for_operation(
         self,
         operation_category: str = "general",
-        required_context_tokens: Optional[int] = None,
+        required_context_tokens: int | None = None,
         require_tool_calling: bool = False,
         require_structured_output: bool = False,
         input_type: str = "text",
         allow_capability_routing: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Capability-aware model selection using configured metadata and routing rules (Section 10).
         Never overrides explicit active_model selection unless allow_capability_routing=True or
         a configurable model_routing_rules entry is set for operation_category.
         """
-        def _check_profile_suitability(prof: ModelProfileConfig) -> Tuple[bool, List[str]]:
-            reasons: List[str] = []
+        def _check_profile_suitability(prof: ModelProfileConfig) -> tuple[bool, list[str]]:
+            reasons: list[str] = []
             if not prof.enabled:
                 return False, [f"Model profile '{prof.profile_id}' is disabled."]
             prov = self.providers.get(prof.provider_id)
@@ -928,7 +952,7 @@ class AgentConfig:
                 }
 
         # 3. If allow_capability_routing is True, search enabled models for the best suitable candidate
-        suitable_candidates: List[Tuple[int, str]] = []
+        suitable_candidates: list[tuple[int, str]] = []
         for cand_id, cand_prof in self.models.items():
             ok, _ = _check_profile_suitability(cand_prof)
             if ok:
@@ -972,7 +996,7 @@ class AgentConfig:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.capabilities_path.mkdir(parents=True, exist_ok=True)
 
-    def save(self, config_path: Optional[str | Path] = None) -> Path:
+    def save(self, config_path: str | Path | None = None) -> Path:
         """
         Atomically persist configuration in schema_version 2 format without exposing secrets.
         """
@@ -1009,7 +1033,7 @@ class AgentConfig:
         atomic_write_text(target, json.dumps(payload, indent=2) + "\n")
         return target
 
-    def to_safe_dict(self) -> Dict[str, Any]:
+    def to_safe_dict(self) -> dict[str, Any]:
         cstore = self.credential_store
         return {
             "schema_version": self.schema_version,
@@ -1041,21 +1065,21 @@ class AgentConfig:
     @classmethod
     def load(
         cls,
-        config_path: Optional[str | Path] = None,
-        workspace_override: Optional[str | Path] = None,
-        overrides: Optional[Dict[str, Any]] = None,
+        config_path: str | Path | None = None,
+        workspace_override: str | Path | None = None,
+        overrides: dict[str, Any] | None = None,
     ) -> AgentConfig:
         """
         Load configuration from JSON file (v1 or v2), environment variables, and overrides.
         Preserves valid provider/model entries when an unrelated non-active entry is invalid.
         """
-        raw: Dict[str, Any] = {}
-        model_raw: Dict[str, Any] = {}
-        providers_raw: Dict[str, Any] = {}
-        models_raw: Dict[str, Any] = {}
-        warnings: List[str] = []
+        raw: dict[str, Any] = {}
+        model_raw: dict[str, Any] = {}
+        providers_raw: dict[str, Any] = {}
+        models_raw: dict[str, Any] = {}
+        warnings: list[str] = []
 
-        target_cfg_file: Optional[Path] = None
+        target_cfg_file: Path | None = None
         if config_path is not None:
             target_cfg_file = Path(config_path)
             if not target_cfg_file.exists():
@@ -1170,7 +1194,7 @@ class AgentConfig:
             raw["allow_local_fallback"] = bool(model_raw["allow_local_fallback"])
 
         # Validate individual provider & model entries, isolating invalid non-active entries
-        valid_providers: Dict[str, ProviderConfig] = {}
+        valid_providers: dict[str, ProviderConfig] = {}
         for pid, pdata in providers_raw.items():
             try:
                 if isinstance(pdata, ProviderConfig):
@@ -1186,7 +1210,7 @@ class AgentConfig:
             except Exception as exc:
                 warnings.append(f"Ignored invalid provider '{pid}': {exc}")
 
-        valid_models: Dict[str, ModelProfileConfig] = {}
+        valid_models: dict[str, ModelProfileConfig] = {}
         for mid, mdata in models_raw.items():
             try:
                 if isinstance(mdata, ModelProfileConfig):

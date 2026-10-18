@@ -10,9 +10,10 @@ import re
 import shutil
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
+from agent911.capabilities.registry import CapabilityRegistry
 from agent911.memory import PersistentMemoryStore
 from agent911.models import (
     CapabilityAvailability,
@@ -22,7 +23,6 @@ from agent911.models import (
     VerificationStatus,
     new_id,
 )
-from agent911.capabilities.registry import CapabilityRegistry
 
 
 def _to_class_name(capability_id: str) -> str:
@@ -36,7 +36,7 @@ def _to_module_filename(capability_id: str) -> str:
     return f"cap_{slug or 'custom'}.py"
 
 
-def _technical_research(context: CapabilityContext, query: str) -> Dict[str, Any]:
+def _technical_research(context: CapabilityContext, query: str) -> dict[str, Any]:
     """Search once per task/query when configured; keep results as untrusted cited evidence."""
     normalized = " ".join(query.split()[:75])[:600]
     cache_key = f"web-research:{normalized.casefold()}"
@@ -69,7 +69,7 @@ def _technical_research(context: CapabilityContext, query: str) -> Dict[str, Any
     return result
 
 
-def _research_records(context: CapabilityContext) -> list[Dict[str, Any]]:
+def _research_records(context: CapabilityContext) -> list[dict[str, Any]]:
     return [
         value for key, value in context.research_cache.items()
         if key.startswith("web-research:")
@@ -148,7 +148,7 @@ class DevelopCapability(Capability):
         "live_test_record": "dict",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         cap_id = str(params["capability_id"]).strip()
         cap_name = str(params["name"]).strip()
         cap_purpose = str(params["purpose"]).strip()
@@ -551,7 +551,7 @@ class DevelopCapability(Capability):
         )
 
     @staticmethod
-    def _test_cases(params: Dict[str, Any]) -> list[Dict[str, Any]]:
+    def _test_cases(params: dict[str, Any]) -> list[dict[str, Any]]:
         cases = params.get("test_cases")
         if isinstance(cases, list) and cases:
             return [c for c in cases if isinstance(c, dict)]
@@ -562,7 +562,7 @@ class DevelopCapability(Capability):
         return []
 
     @staticmethod
-    def _write_test_fixtures(workspace: Path, fixtures: Dict[str, Any]) -> Optional[str]:
+    def _write_test_fixtures(workspace: Path, fixtures: dict[str, Any]) -> str | None:
         if not isinstance(fixtures, dict):
             return "test_workspace_files must be a mapping of relative paths to text content."
         for relative, contents in fixtures.items():
@@ -587,11 +587,11 @@ class DevelopCapability(Capability):
         class_name: str,
         cap_name: str,
         cap_purpose: str,
-        input_schema: Dict[str, Any],
-        output_format: Dict[str, Any],
-        cases: list[Dict[str, Any]],
+        input_schema: dict[str, Any],
+        output_format: dict[str, Any],
+        cases: list[dict[str, Any]],
         behavior_spec: str,
-        failure_evidence: Optional[Dict[str, Any]] = None,
+        failure_evidence: dict[str, Any] | None = None,
     ) -> str:
         """Ask the configured model for a complete module; never substitute fake code."""
         system = (
@@ -652,7 +652,7 @@ class DevelopCapability(Capability):
 
     def _retry_model_candidate(
         self,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         context: CapabilityContext,
         attempt_dir: Path,
         workbench_root: Path,
@@ -661,13 +661,13 @@ class DevelopCapability(Capability):
         class_name: str,
         cap_name: str,
         cap_purpose: str,
-        input_schema: Dict[str, Any],
-        output_format: Dict[str, Any],
+        input_schema: dict[str, Any],
+        output_format: dict[str, Any],
         behavior_spec: str,
-        cases: list[Dict[str, Any]],
-        evidence: Dict[str, Any],
+        cases: list[dict[str, Any]],
+        evidence: dict[str, Any],
         enabled: bool,
-    ) -> Optional[CapabilityResult]:
+    ) -> CapabilityResult | None:
         max_revisions = max(0, min(3, int(params.get("max_revisions", 3))))
         if not enabled or attempt_number > max_revisions:
             return None
@@ -796,9 +796,9 @@ class DevelopCapability(Capability):
         class_name: str,
         cap_name: str,
         cap_purpose: str,
-        input_schema: Dict[str, Any],
-        output_format: Dict[str, Any],
-        raw_code: Optional[str],
+        input_schema: dict[str, Any],
+        output_format: dict[str, Any],
+        raw_code: str | None,
         behavior_spec: str,
         context: CapabilityContext,
     ) -> str:
@@ -839,7 +839,7 @@ class DevelopCapability(Capability):
 
     @staticmethod
     def _synthesize_execute_body(
-        cap_id: str, behavior_spec: str, input_schema: Dict[str, Any]
+        cap_id: str, behavior_spec: str, input_schema: dict[str, Any]
     ) -> str:
         """Synthesize a real, working implementation for common capability specifications."""
         spec_lower = f"{cap_id} {behavior_spec}".lower()
@@ -921,7 +921,7 @@ class DevelopCapability(Capability):
         )
 
     @staticmethod
-    def _default_test_params(cap_id: str, input_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def _default_test_params(cap_id: str, input_schema: dict[str, Any]) -> dict[str, Any]:
         spec_lower = cap_id.lower()
         if "csv" in spec_lower and "json" in spec_lower:
             return {"csv_text": "name,score\nalice,95\nbob,88"}
@@ -932,7 +932,7 @@ class DevelopCapability(Capability):
         if any(k in spec_lower for k in ("stat", "mean", "math", "numbers")):
             return {"numbers": [10, 20, 30]}
 
-        sample: Dict[str, Any] = {}
+        sample: dict[str, Any] = {}
         props = input_schema.get("properties", {})
         for req_key in input_schema.get("required", []):
             ptype = props.get(req_key, {}).get("type", "string")
@@ -977,14 +977,14 @@ class DevelopSkillCapability(Capability):
     }
     side_effects = ["workspace_write"]
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         markdown = str(params.get("skill_markdown") or "")
         workbench = context.config.data_path / "workbench" / re.sub(
             r"[^a-zA-Z0-9_-]+", "_", context.task_id or "manual"
         )[:64] / new_id("skill")
         workbench.mkdir(parents=True, exist_ok=False)
-        slug: Optional[str] = None
-        candidate: Optional[Path] = None
+        slug: str | None = None
+        candidate: Path | None = None
         if markdown.strip():
             slug, issue = self._validate_skill(markdown)
             if issue:
@@ -1125,7 +1125,7 @@ class DevelopSkillCapability(Capability):
         context: CapabilityContext,
         skill_spec: str,
         test_cases: list[Any],
-        previous_issue: Optional[str],
+        previous_issue: str | None,
     ) -> str:
         response = context.model_interface.generate(
             system_prompt=(
@@ -1161,7 +1161,7 @@ class DevelopSkillCapability(Capability):
         return markdown
 
     @staticmethod
-    def _validate_skill(markdown: str) -> Tuple[Optional[str], Optional[str]]:
+    def _validate_skill(markdown: str) -> tuple[str | None, str | None]:
         if not markdown.startswith("---\n"):
             return None, "SKILL.md must start with YAML frontmatter delimited by --- lines."
         parts = markdown.split("---", 2)

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 from agent911.capabilities.base import CapabilityContext
 from agent911.diagnostics import CapabilityGapAnalyzer, SelfDiagnosticEngine
@@ -13,13 +13,11 @@ from agent911.models import (
     ExecutionErrorRecord,
     FailureRootCauseCategory,
     PlannedAction,
-    ProblemSolvingStrategy,
     RecoveryAttemptRecord,
     TaskState,
     new_id,
 )
 from agent911.strategy import StrategySelector
-
 
 _UNRECOVERABLE_ERROR_TYPES = {
     "WorkspaceBoundaryError",
@@ -39,10 +37,10 @@ class DiagnosisAndRemedy:
     probable_cause: str
     selected_correction: str
     root_cause_category: FailureRootCauseCategory = FailureRootCauseCategory.UNKNOWN_CAUSE
-    diagnostic_report: Optional[DiagnosticReport] = None
-    pre_action: Optional[Tuple[str, Dict[str, Any]]] = None  # (capability_id, params) to run first
-    updated_parameters: Optional[Dict[str, Any]] = None
-    matched_experience_id: Optional[str] = None
+    diagnostic_report: DiagnosticReport | None = None
+    pre_action: tuple[str, dict[str, Any]] | None = None  # (capability_id, params) to run first
+    updated_parameters: dict[str, Any] | None = None
+    matched_experience_id: str | None = None
     notes: str = ""
 
 
@@ -54,8 +52,8 @@ class RecoveryEngine:
 
     def __init__(self, max_attempts_per_step: int = 2) -> None:
         self.max_attempts_per_step = max_attempts_per_step
-        self._attempt_counts: Dict[str, int] = {}
-        self._seen_failure_signatures: Set[Tuple[str, str, str, str]] = set()
+        self._attempt_counts: dict[str, int] = {}
+        self._seen_failure_signatures: set[tuple[str, str, str, str]] = set()
         self.diagnostic_engine = SelfDiagnosticEngine()
         self.gap_analyzer = CapabilityGapAnalyzer()
         self.strategy_selector = StrategySelector()
@@ -64,8 +62,8 @@ class RecoveryEngine:
         self,
         action: PlannedAction,
         error_record: ExecutionErrorRecord,
-        task: Optional[TaskState] = None,
-    ) -> Tuple[bool, str]:
+        task: TaskState | None = None,
+    ) -> tuple[bool, str]:
         """Check retry limits, repeated-failure signatures, unproductive loops, and unrecoverable error types."""
         if task is not None:
             loop_detected, loop_desc = self.diagnostic_engine.detect_unproductive_loop(task)
@@ -173,7 +171,7 @@ class RecoveryEngine:
         if err_type == "ParentDirectoryNotFoundError":
             missing_parent = failed_result.metadata.get("missing_parent")
             if not missing_parent and "path" in action.parameters:
-                p_str = str(action.parameters["path"])
+                p_str = str(action.parameters["path"]).replace("\\", "/")
                 if "/" in p_str:
                     missing_parent = p_str.rsplit("/", 1)[0]
             if missing_parent:
@@ -284,7 +282,7 @@ class RecoveryEngine:
         failed_result: CapabilityResult,
         error_record: ExecutionErrorRecord,
         context: CapabilityContext,
-    ) -> Tuple[bool, Optional[CapabilityResult]]:
+    ) -> tuple[bool, CapabilityResult | None]:
         """
         Execute targeted recovery for a failed step:
         1. Diagnose probable cause and select correction

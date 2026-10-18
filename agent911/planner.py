@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agent911.capabilities.distill_ops import InstructionDistiller
 from agent911.capabilities.registry import CapabilityRegistry
@@ -17,10 +17,8 @@ from agent911.models import (
     DistilledBuildSpec,
     InstructionIntent,
     PlannedAction,
-    ProblemSolvingStrategy,
     TaskRequirement,
     TaskState,
-    new_id,
 )
 from agent911.strategy import StrategySelector
 
@@ -45,9 +43,9 @@ class TaskPlanner:
     def understand_and_plan(
         self,
         task: TaskState,
-        retrieved_context: Dict[str, Any],
-        explicit_plan: Optional[List[Dict[str, Any]]] = None,
-        explicit_requirements: Optional[List[Dict[str, Any]]] = None,
+        retrieved_context: dict[str, Any],
+        explicit_plan: list[dict[str, Any]] | None = None,
+        explicit_requirements: list[dict[str, Any]] | None = None,
     ) -> None:
         """
         Populate task.intent, task.interpreted_objective, task.requirements,
@@ -191,7 +189,7 @@ class TaskPlanner:
         return False
 
     def _plan_via_model(
-        self, task: TaskState, retrieved_context: Dict[str, Any]
+        self, task: TaskState, retrieved_context: dict[str, Any]
     ) -> bool:
         caps_summary = [
             {
@@ -253,7 +251,7 @@ class TaskPlanner:
         task.interpreted_objective = intent.main_goal
         task.assumptions = list(intent.assumptions)
 
-        actions: List[PlannedAction] = []
+        actions: list[PlannedAction] = []
         for idx, raw_act in enumerate(data["planned_actions"]):
             cap_id = str(raw_act.get("capability_id", ""))
             actions.append(
@@ -312,7 +310,7 @@ class TaskPlanner:
         )
 
     @staticmethod
-    def _extract_acceptance_cases(instruction: str) -> List[Dict[str, Any]]:
+    def _extract_acceptance_cases(instruction: str) -> list[dict[str, Any]]:
         """Extract explicit JSON acceptance cases without guessing from prose."""
         decoder = json.JSONDecoder()
         cases_match = re.search(r"\btest_cases\s*[:=]\s*\[", instruction, re.IGNORECASE)
@@ -358,19 +356,19 @@ class TaskPlanner:
     def _derive_heuristic_intent(
         self,
         instruction: str,
-        experiences: List[Dict[str, Any]],
-        memories: List[Dict[str, Any]],
-        distilled_spec: Optional[DistilledBuildSpec] = None,
+        experiences: list[dict[str, Any]],
+        memories: list[dict[str, Any]],
+        distilled_spec: DistilledBuildSpec | None = None,
     ) -> InstructionIntent:
         if distilled_spec is None:
             distilled_spec = InstructionDistiller.distill(instruction)
 
         lower = instruction.lower()
-        reqs: List[str] = []
-        outputs: List[str] = []
-        caps: List[str] = []
-        assumptions: List[str] = []
-        artifacts: List[str] = []
+        reqs: list[str] = []
+        outputs: list[str] = []
+        caps: list[str] = []
+        assumptions: list[str] = []
+        artifacts: list[str] = []
 
         # Extract file paths mentioned in instruction
         file_matches = re.findall(
@@ -484,7 +482,7 @@ class TaskPlanner:
                 reqs.append("Respond naturally and helpfully to the user's conversational message.")
                 outputs.append("conversational_reply")
 
-        inferred_reqs: List[str] = []
+        inferred_reqs: list[str] = []
         for art in artifacts:
             if art.endswith(".py"):
                 inferred_reqs.append(f"Python file '{art}' must compile without syntax errors.")
@@ -497,9 +495,9 @@ class TaskPlanner:
             if c["availability"] == CapabilityAvailability.AVAILABLE.value
         ]
 
-        unknowns: List[str] = []
+        unknowns: list[str] = []
         clarification_needed = False
-        clarification_question: Optional[str] = None
+        clarification_question: str | None = None
         if any(w in lower for w in ("delete everything", "wipe production", "drop database")):
             clarification_needed = True
             clarification_question = (
@@ -549,15 +547,15 @@ class TaskPlanner:
         self,
         instruction: str,
         intent: InstructionIntent,
-        experiences: List[Dict[str, Any]],
-        distilled_spec: Optional[DistilledBuildSpec] = None,
-    ) -> Tuple[List[PlannedAction], List[TaskRequirement]]:
+        experiences: list[dict[str, Any]],
+        distilled_spec: DistilledBuildSpec | None = None,
+    ) -> tuple[list[PlannedAction], list[TaskRequirement]]:
         if distilled_spec is None:
             distilled_spec = InstructionDistiller.distill(instruction)
 
         lower = instruction.lower()
-        actions: List[PlannedAction] = []
-        requirements: List[TaskRequirement] = []
+        actions: list[PlannedAction] = []
+        requirements: list[TaskRequirement] = []
         step_counter = 1
 
         def next_step_id() -> str:
@@ -570,7 +568,7 @@ class TaskPlanner:
         # source-file planning or capability-gap invocation.
         if self._is_skill_authoring_request(instruction):
             step_id = next_step_id()
-            params: Dict[str, Any] = {"skill_spec": instruction}
+            params: dict[str, Any] = {"skill_spec": instruction}
             cases = self._extract_acceptance_cases(instruction)
             if cases:
                 params["test_cases"] = cases
@@ -602,7 +600,7 @@ class TaskPlanner:
         if cap_dev_match:
             cap_id = cap_dev_match.group(1)
             cases = self._extract_acceptance_cases(instruction)
-            input_props: Dict[str, Dict[str, str]] = {}
+            input_props: dict[str, dict[str, str]] = {}
             if cases:
                 for key, value in cases[0]["params"].items():
                     typ = (
@@ -674,7 +672,7 @@ class TaskPlanner:
                         )
                     )
                 # Also invoke the newly developed capability
-                invoke_params: Dict[str, Any] = {}
+                invoke_params: dict[str, Any] = {}
                 if intent.target_artifacts:
                     invoke_params["path"] = intent.target_artifacts[0]
                 else:
@@ -1167,7 +1165,7 @@ class TaskPlanner:
                 and self.registry.has(req_cap)
                 and not any(a.capability_id == req_cap for a in actions)
             ):
-                params: Dict[str, Any] = {}
+                params: dict[str, Any] = {}
                 if intent.target_artifacts:
                     params["path"] = intent.target_artifacts[0]
                 elif req_cap == "research.web_search":
@@ -1198,9 +1196,9 @@ class TaskPlanner:
         return actions, requirements
 
     def _infer_requirements_from_actions(
-        self, actions: List[PlannedAction]
-    ) -> List[TaskRequirement]:
-        reqs: List[TaskRequirement] = []
+        self, actions: list[PlannedAction]
+    ) -> list[TaskRequirement]:
+        reqs: list[TaskRequirement] = []
         for idx, act in enumerate(actions):
             cid = act.capability_id
             p = act.parameters
@@ -1282,7 +1280,7 @@ class TaskPlanner:
     @staticmethod
     def _extract_file_content_from_instruction(
         instruction: str, target_file: str
-    ) -> Tuple[str, Optional[str]]:
+    ) -> tuple[str, str | None]:
         # 1. Check for fenced code block
         if "```" in instruction:
             parts = instruction.split("```")
@@ -1332,8 +1330,8 @@ class TaskPlanner:
     def _apply_experience_to_plan(
         self,
         task: TaskState,
-        experiences: List[Dict[str, Any]],
-        memories: Optional[List[Dict[str, Any]]] = None,
+        experiences: list[dict[str, Any]],
+        memories: list[dict[str, Any]] | None = None,
     ) -> None:
         """
         Use relevant historical experience and learned operational policies to improve
@@ -1351,7 +1349,7 @@ class TaskPlanner:
 
         # 2. Check if past experiences recorded a remedy for ParentDirectoryNotFoundError
         has_parent_dir_remedy = False
-        remedy_exp_ids: List[str] = []
+        remedy_exp_ids: list[str] = []
         for exp in experiences or []:
             failures_str = " ".join(exp.get("unexpected_failures", [])).lower()
             remedies_str = " ".join(exp.get("successful_remedies", [])).lower()
@@ -1363,8 +1361,8 @@ class TaskPlanner:
         if has_parent_dir_remedy or policy_create_parents:
             for action in task.planned_actions:
                 if action.capability_id == "fs.write":
-                    rel_path = action.parameters.get("path", "")
-                    if "/" in str(rel_path) and "create_parents" not in action.parameters:
+                    rel_path = str(action.parameters.get("path", "")).replace("\\", "/")
+                    if "/" in rel_path and "create_parents" not in action.parameters:
                         action.parameters["create_parents"] = True
                         source_label = (
                             "learned policy 'policy.fs_write.create_parents'"
@@ -1377,7 +1375,7 @@ class TaskPlanner:
                         )
 
     def _finalize_plan_and_strategy(
-        self, task: TaskState, experiences: List[Dict[str, Any]]
+        self, task: TaskState, experiences: list[dict[str, Any]]
     ) -> None:
         """
         Enforce subtask bounds, populate expected_outputs and dependencies, and select
@@ -1391,23 +1389,22 @@ class TaskPlanner:
             )
 
         # Populate expected_outputs and infer explicit step dependencies where missing
-        mkdir_steps: Dict[str, str] = {}
-        write_step_ids: List[str] = []
+        mkdir_steps: dict[str, str] = {}
+        write_step_ids: list[str] = []
         for act in task.planned_actions:
             if not act.expected_outputs:
-                if act.capability_id in ("fs.write", "fs.update") and act.parameters.get("path"):
-                    act.expected_outputs = [str(act.parameters["path"])]
-                elif act.capability_id == "fs.mkdir" and act.parameters.get("path"):
+                if act.capability_id in ("fs.write", "fs.update") and act.parameters.get("path") or act.capability_id == "fs.mkdir" and act.parameters.get("path"):
                     act.expected_outputs = [str(act.parameters["path"])]
                 else:
                     act.expected_outputs = [f"{act.step_id}_output"]
 
             if act.capability_id == "fs.mkdir" and act.parameters.get("path"):
-                mkdir_steps[str(act.parameters["path"]).rstrip("/")] = act.step_id
+                norm_dir = str(act.parameters["path"]).replace("\\", "/").rstrip("/")
+                mkdir_steps[norm_dir] = act.step_id
             elif act.capability_id in ("fs.write", "fs.update"):
                 write_step_ids.append(act.step_id)
-                rel_p = str(act.parameters.get("path", ""))
-                parent_p = str(Path(rel_p).parent)
+                rel_p = str(act.parameters.get("path", "")).replace("\\", "/")
+                parent_p = Path(rel_p).parent.as_posix().rstrip("/")
                 if parent_p in mkdir_steps:
                     dep_id = mkdir_steps[parent_p]
                     if dep_id not in act.depends_on and dep_id != act.step_id:
@@ -1434,7 +1431,7 @@ class TaskPlanner:
     def revise_plan_with_new_evidence(
         self,
         task: TaskState,
-        new_pending_actions: List[PlannedAction],
+        new_pending_actions: list[PlannedAction],
         reason: str,
     ) -> None:
         """

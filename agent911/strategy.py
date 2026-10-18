@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from agent911.models import (
     FailureRootCauseCategory,
@@ -21,17 +21,17 @@ class StrategySpec:
 
     strategy: ProblemSolvingStrategy
     intended_use: str
-    inappropriate_when: List[str] = field(default_factory=list)
+    inappropriate_when: list[str] = field(default_factory=list)
     execution_cost: str = "low"  # low, medium, high
     expected_reliability: str = "high"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["strategy"] = self.strategy.value
         return d
 
 
-STRATEGY_CATALOG: Dict[ProblemSolvingStrategy, StrategySpec] = {
+STRATEGY_CATALOG: dict[ProblemSolvingStrategy, StrategySpec] = {
     ProblemSolvingStrategy.DIRECT_EXECUTION: StrategySpec(
         strategy=ProblemSolvingStrategy.DIRECT_EXECUTION,
         intended_use="Single-operation queries, memory lookups/stores, or read-only inspections.",
@@ -116,7 +116,7 @@ class StrategySelector:
     """
 
     @staticmethod
-    def list_strategies() -> List[Dict[str, Any]]:
+    def list_strategies() -> list[dict[str, Any]]:
         return [spec.to_dict() for spec in STRATEGY_CATALOG.values()]
 
     @classmethod
@@ -125,9 +125,9 @@ class StrategySelector:
         task: TaskState,
         intent: InstructionIntent,
         available_capability_ids: set[str],
-        relevant_experiences: List[Dict[str, Any]],
+        relevant_experiences: list[dict[str, Any]],
         is_resumption: bool = False,
-    ) -> Tuple[ProblemSolvingStrategy, str]:
+    ) -> tuple[ProblemSolvingStrategy, str]:
         """
         Determine the most appropriate initial strategy based on task evidence.
         Records the selection on task.selected_strategy and task.strategy_history.
@@ -211,7 +211,7 @@ class StrategySelector:
         root_cause: FailureRootCauseCategory,
         failed_action: PlannedAction,
         reason: str,
-    ) -> Tuple[ProblemSolvingStrategy, str]:
+    ) -> tuple[ProblemSolvingStrategy, str]:
         """
         Switch strategy when the current approach fails, based on diagnosed root cause.
         """
@@ -246,8 +246,8 @@ class StrategySelector:
 
     @staticmethod
     def _find_applicable_verified_experience(
-        required_caps: List[str], experiences: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+        required_caps: list[str], experiences: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
         if not required_caps or not experiences:
             return None
         req_set = set(required_caps)

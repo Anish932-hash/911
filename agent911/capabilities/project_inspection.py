@@ -6,12 +6,14 @@ import ast
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
-from agent911.capabilities.filesystem import WorkspaceBoundaryError, resolve_in_workspace
+from agent911.capabilities.filesystem import (
+    WorkspaceBoundaryError,
+    resolve_in_workspace,
+)
 from agent911.models import CapabilityResult
-
 
 _IGNORED_DIRS = {
     ".git",
@@ -85,7 +87,7 @@ class InspectProjectCapability(Capability):
         "python_symbols": "dict[str, dict]",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         rel_path = params.get("path", ".")
         include_ast = bool(params.get("include_ast_symbols", True))
 
@@ -107,22 +109,22 @@ class InspectProjectCapability(Capability):
                 error_type="FileNotFoundError",
             )
 
-        project_files: List[str] = []
+        project_files: list[str] = []
         source_dirs_set: set[str] = set()
-        config_files: List[str] = []
-        doc_files: List[str] = []
-        test_files: List[str] = []
-        manifests: List[str] = []
-        entry_points: List[str] = []
-        dependencies: List[str] = []
-        python_symbols: Dict[str, Dict[str, List[str]]] = {}
+        config_files: list[str] = []
+        doc_files: list[str] = []
+        test_files: list[str] = []
+        manifests: list[str] = []
+        entry_points: list[str] = []
+        dependencies: list[str] = []
+        python_symbols: dict[str, dict[str, list[str]]] = {}
 
         for item in sorted(root.rglob("*"), key=lambda p: str(p)):
             rel = item.relative_to(root)
             if any(part in _IGNORED_DIRS or part.endswith(".egg-info") for part in rel.parts):
                 continue
 
-            rel_str = str(rel)
+            rel_str = rel.as_posix()
             if item.is_dir():
                 if (item / "__init__.py").exists() or item.name in ("src", "lib", "app"):
                     source_dirs_set.add(rel_str)
@@ -198,7 +200,7 @@ class InspectProjectCapability(Capability):
             capability_id=self.identifier,
             success=True,
             data={
-                "root": str(root.relative_to(ws)) if root != ws else ".",
+                "root": root.relative_to(ws).as_posix() if root != ws else ".",
                 "project_files": project_files,
                 "source_directories": sorted(source_dirs_set),
                 "configuration_files": config_files,
@@ -212,8 +214,8 @@ class InspectProjectCapability(Capability):
         )
 
     @staticmethod
-    def _extract_dependencies(manifest_path: Path) -> List[str]:
-        deps: List[str] = []
+    def _extract_dependencies(manifest_path: Path) -> list[str]:
+        deps: list[str] = []
         try:
             text = manifest_path.read_text(encoding="utf-8", errors="replace")
             if manifest_path.name == "requirements.txt":

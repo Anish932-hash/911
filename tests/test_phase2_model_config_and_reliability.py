@@ -13,19 +13,16 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.config import (
     AgentConfig,
     ConfigurationError,
-    CredentialStore,
     ModelProfileConfig,
     ProviderConfig,
 )
-from agent911.evaluation.verification import Verifier
 from agent911.model_provider import (
-    ModelInterface,
     ProviderConnectivityStatus,
     RequestCancelledError,
     UnsupportedModelFeatureError,
@@ -53,6 +50,9 @@ class _MultiAdapterMockHandler(http.server.BaseHTTPRequestHandler):
         pass
 
     def do_POST(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len > 0:
+            self.rfile.read(content_len)
         m = _MultiAdapterMockHandler.mode
         if m == "openai_ok":
             body = json.dumps(
@@ -595,7 +595,7 @@ class TestPhase2ModelConfigAndReliability(unittest.TestCase):
             required_dependencies = ["nonexistent_python_package_xyz_911"]
 
             def execute(
-                self, params: Dict[str, Any], context: CapabilityContext
+                self, params: dict[str, Any], context: CapabilityContext
             ) -> CapabilityResult:
                 return CapabilityResult(capability_id=self.identifier, success=True)
 

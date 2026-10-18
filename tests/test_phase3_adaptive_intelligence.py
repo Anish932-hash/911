@@ -121,7 +121,7 @@ class TestPhase3AdaptiveIntelligence(unittest.TestCase):
         - Strategy selection across task types (DIRECT_EXECUTION, CAPABILITY_DELEGATION_OR_GROWTH, REUSE_PROVEN_PROCEDURE)
         - Strategy adaptation when an initial step fails (switching to FAILURE_DIAGNOSIS_AND_ALTERNATIVE)
         """
-        from agent911.strategy import STRATEGY_CATALOG, StrategySelector
+        from agent911.strategy import STRATEGY_CATALOG
 
         self.assertGreaterEqual(len(STRATEGY_CATALOG), 8)
         for strat, spec in STRATEGY_CATALOG.items():

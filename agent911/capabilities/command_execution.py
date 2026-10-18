@@ -2,14 +2,52 @@
 
 from __future__ import annotations
 
+import os
 import shlex
+import shutil
 import subprocess
+import sys
 import time
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
-from agent911.capabilities.filesystem import WorkspaceBoundaryError, resolve_in_workspace
+from agent911.capabilities.filesystem import (
+    WorkspaceBoundaryError,
+    resolve_in_workspace,
+)
 from agent911.models import CapabilityResult
+
+
+def _split_command_args(raw_cmd: str) -> list[str]:
+    """Split a command string while preserving Windows backslash paths when running on Windows."""
+    if os.name == "nt":
+        raw_tokens = shlex.split(raw_cmd, posix=False)
+        cleaned: list[str] = []
+        for tok in raw_tokens:
+            if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ("'", '"'):
+                cleaned.append(tok[1:-1])
+            else:
+                cleaned.append(tok)
+        return cleaned
+    return shlex.split(raw_cmd, posix=True)
+
+
+def _resolve_executable_args(args: list[str]) -> list[str]:
+    """Resolve executable shims (.cmd, .bat, .exe) and python3 alias on Windows."""
+    if not args:
+        return args
+    resolved = list(args)
+    exe = resolved[0]
+    if os.name == "nt":
+        if exe.lower() in ("python3", "python", "python.exe", "python3.exe"):
+            resolved[0] = sys.executable
+            return resolved
+        if not Path(exe).is_absolute():
+            which_path = shutil.which(exe)
+            if which_path:
+                resolved[0] = which_path
+    return resolved
 
 
 class RunCommandCapability(Capability):
@@ -49,7 +87,7 @@ class RunCommandCapability(Capability):
         "duration_ms": "float",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         raw_cmd = params["command"]
         rel_cwd = params.get("cwd", ".")
         timeout = float(params.get("timeout_seconds", context.config.command_timeout_seconds))
@@ -90,7 +128,7 @@ class RunCommandCapability(Capability):
                     error_type="InputValidationError",
                 )
             try:
-                args: List[str] = shlex.split(raw_cmd)
+                args: list[str] = _split_command_args(raw_cmd)
             except ValueError as exc:
                 return CapabilityResult(
                     capability_id=self.identifier,
@@ -108,15 +146,18 @@ class RunCommandCapability(Capability):
                 error_type="InputValidationError",
             )
 
+        exec_args = _resolve_executable_args(args)
+        no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         t0 = time.monotonic()
         try:
             completed = subprocess.run(
-                args,
+                exec_args,
                 cwd=str(cwd_path),
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 shell=False,
+                creationflags=no_window,
             )
             elapsed_ms = (time.monotonic() - t0) * 1000.0
             exit_code = completed.returncode

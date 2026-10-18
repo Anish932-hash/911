@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+from unittest.mock import patch
 
 from agent911.capabilities import (
     Capability,
@@ -25,7 +24,6 @@ from agent911.model_provider import (
     ModelInterface,
     ModelProviderError,
     ProviderConnectivityStatus,
-    extract_json_object,
 )
 from agent911.models import (
     ActionStatus,
@@ -50,7 +48,7 @@ class _StubPassCapability(Capability):
     name = "Stub Pass"
     purpose = "Invalid stub capability"
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         pass
 
 
@@ -60,7 +58,7 @@ class _WindowsOnlyCapability(Capability):
     purpose = "Test platform-aware capability availability"
     supported_platforms = ["windows"]
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         return CapabilityResult(capability_id=self.identifier, success=True, data={"ok": True})
 
 
@@ -350,6 +348,9 @@ class TestApplicationFoundation(unittest.TestCase):
                 return
 
             def do_POST(self) -> None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                if content_len > 0:
+                    self.rfile.read(content_len)
                 if state["mode"] == "auth_error":
                     self.send_response(401)
                     self.send_header("Content-Type", "application/json")

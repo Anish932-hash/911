@@ -6,9 +6,11 @@ import ast
 import json
 import py_compile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
-from agent911.capabilities.filesystem import WorkspaceBoundaryError, resolve_in_workspace
+from agent911.capabilities.filesystem import (
+    WorkspaceBoundaryError,
+    resolve_in_workspace,
+)
 from agent911.capabilities.registry import CapabilityRegistry
 from agent911.memory import PersistentMemoryStore
 from agent911.models import (
@@ -39,9 +41,9 @@ class Verifier:
         self.registry = registry
         self.memory_store = memory_store
 
-    def verify_task(self, task: TaskState) -> List[VerificationCheckResult]:
+    def verify_task(self, task: TaskState) -> list[VerificationCheckResult]:
         """Run all applicable verification checks for a task and update task state."""
-        results: List[VerificationCheckResult] = []
+        results: list[VerificationCheckResult] = []
 
         # 1. Verify completion of required planned steps
         step_check = self._verify_planned_steps(task)
@@ -222,7 +224,7 @@ class Verifier:
             required=req.required,
         )
 
-    def _resolve_target_path(self, target: Optional[str]) -> Optional[Path]:
+    def _resolve_target_path(self, target: str | None) -> Path | None:
         if not target:
             return None
         try:

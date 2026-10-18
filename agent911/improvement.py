@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import copy
-import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.models import (
     ImprovementProposal,
@@ -19,7 +16,6 @@ from agent911.models import (
     new_id,
     utc_now_iso,
 )
-
 
 _FORBIDDEN_SECURITY_TARGETS = {
     "workspace_root",
@@ -42,7 +38,7 @@ class ImprovementEngine:
         self.orchestrator = orchestrator
         self.memory_store = orchestrator.memory_store
 
-    def detect_and_propose(self) -> List[ImprovementProposal]:
+    def detect_and_propose(self) -> list[ImprovementProposal]:
         """
         Inspect actual task history, execution logs, and experience usefulness records
         to generate and persist evidence-backed ImprovementProposals.
@@ -50,7 +46,7 @@ class ImprovementEngine:
         existing_proposals = {
             p.title: p for p in self.memory_store.list_improvement_proposals()
         }
-        new_or_updated: List[ImprovementProposal] = []
+        new_or_updated: list[ImprovementProposal] = []
 
         tasks_summary = self.memory_store.list_tasks(limit=50)
         loaded_tasks = []
@@ -60,7 +56,7 @@ class ImprovementEngine:
                 loaded_tasks.append(t_obj)
 
         # 1. Check for repeated ParentDirectoryNotFoundError across tasks/steps
-        parent_dir_errors: List[str] = []
+        parent_dir_errors: list[str] = []
         for t in loaded_tasks:
             for err in t.errors:
                 if err.error_type == "ParentDirectoryNotFoundError":
@@ -237,8 +233,8 @@ class ImprovementEngine:
         return self.list_prioritized_proposals()
 
     def list_prioritized_proposals(
-        self, status: Optional[ImprovementStatus | str] = None
-    ) -> List[ImprovementProposal]:
+        self, status: ImprovementStatus | str | None = None
+    ) -> list[ImprovementProposal]:
         """Return all persisted proposals ordered by priority (HIGH > MEDIUM > LOW) and recency."""
         proposals = self.memory_store.list_improvement_proposals(status=status)
         rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}

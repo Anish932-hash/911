@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.config import AgentConfig, ConfigurationError
 from agent911.models import TaskOutcome, TaskState
@@ -13,7 +13,7 @@ from agent911.orchestrator import Agent911Orchestrator
 
 
 def _format_task_report(task: TaskState) -> str:
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(f"=== AGENT 911 TASK EXECUTION REPORT [{task.task_id}] ===")
     lines.append(f"Original Instruction : {task.original_instruction}")
     lines.append(f"Interpreted Objective: {task.interpreted_objective}")
@@ -102,7 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-id", help="Override AI model identifier", default=None)
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output")
 
-    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+    subparsers = parser.add_subparsers(dest="subcommand", required=False)
 
     # status
     subparsers.add_parser(
@@ -128,12 +128,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("instruction", help="Natural-language instruction to execute")
 
-    # chat
+    # chat / console / repl
     chat_parser = subparsers.add_parser(
         "chat",
-        help="Talk conversationally with Agent 911 or execute instructions in single-turn or interactive REPL mode",
+        aliases=["console", "repl"],
+        help="Interactive terminal console or single-turn conversational/task execution",
     )
-    chat_parser.add_argument("message", nargs="?", help="Message or instruction (omit for interactive REPL)", default=None)
+    chat_parser.add_argument("message", nargs="?", help="Message or instruction (omit for interactive console)", default=None)
+
+    # doctor
+    subparsers.add_parser(
+        "doctor",
+        help="Run environment, Windows-readiness, SQLite persistence, and capability diagnostics",
+    )
 
     # distill
     distill_parser = subparsers.add_parser(
@@ -268,12 +275,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    overrides: Dict[str, Any] = {}
-    model_overrides: Dict[str, Any] = {}
+    overrides: dict[str, Any] = {}
+    model_overrides: dict[str, Any] = {}
     if args.provider:
         model_overrides["provider"] = args.provider
     if args.model_id:
@@ -296,6 +303,68 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     cmd = args.subcommand
+    if not cmd:
+        cmd = "chat" if sys.stdin.isatty() and not args.json else "status"
+
+    if cmd == "doctor":
+        import os
+        import platform
+
+        conn_report = orchestrator.model_interface.check_connectivity()
+        caps = orchestrator.registry.list_capabilities()
+        avail_caps = [c for c in caps if c["availability"] == "AVAILABLE"]
+        unavail_caps = [c for c in caps if c["availability"] != "AVAILABLE"]
+        doctor_payload = {
+            "platform": {
+                "system": platform.system(),
+                "release": platform.release(),
+                "os_name": os.name,
+                "python_version": platform.python_version(),
+                "python_executable": sys.executable,
+            },
+            "paths": {
+                "workspace_root": str(config.workspace_path),
+                "data_dir": str(config.data_path),
+                "database_path": str(config.db_path),
+                "credentials_vault": str(config.credentials_vault_path),
+                "custom_capabilities_dir": str(config.capabilities_path),
+            },
+            "capabilities": {
+                "registered": len(caps),
+                "available": len(avail_caps),
+                "unavailable": [
+                    {"identifier": c["identifier"], "availability": c["availability"]}
+                    for c in unavail_caps
+                ],
+            },
+            "model_connectivity": conn_report.to_dict(),
+            "persistence": {
+                "database_exists": config.db_path.exists(),
+                "memories_count": len(orchestrator.memory_store.retrieve_memories(limit=100)),
+                "experiences_count": len(orchestrator.memory_store.retrieve_experiences(limit=100)),
+                "tasks_count": len(orchestrator.memory_store.list_tasks(limit=100)),
+            },
+        }
+        if args.json:
+            print(json.dumps(doctor_payload, indent=2))
+        else:
+            print("=== AGENT 911 SYSTEM & WINDOWS READINESS DIAGNOSTIC (DOCTOR) ===")
+            print(f"OS Platform            : {doctor_payload['platform']['system']} {doctor_payload['platform']['release']} (os.name={os.name})")
+            print(f"Python Runtime         : {doctor_payload['platform']['python_version']} ({sys.executable})")
+            print(f"Workspace Boundary     : {config.workspace_path}")
+            print(f"SQLite Database        : {config.db_path} (exists={config.db_path.exists()})")
+            print(f"Credential Vault       : {config.credentials_vault_path}")
+            print(f"Capabilities           : {len(avail_caps)}/{len(caps)} operational")
+            for uc in unavail_caps:
+                print(f"  * {uc['identifier']}: {uc['availability']}")
+            print(f"Model Profile          : {config.active_model} -> {conn_report.provider}/{conn_report.model_id}")
+            print(f"Model Connectivity     : {conn_report.status.value} ({conn_report.details})")
+            print(
+                f"Persisted Records      : {doctor_payload['persistence']['tasks_count']} tasks, "
+                f"{doctor_payload['persistence']['memories_count']} memories, "
+                f"{doctor_payload['persistence']['experiences_count']} experiences"
+            )
+        return 0
 
     if cmd == "status":
         conn_report = orchestrator.model_interface.check_connectivity()
@@ -351,8 +420,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(_format_task_report(task))
         return 0 if task.final_outcome == TaskOutcome.SUCCESS else 1
 
-    if cmd == "chat":
-        if args.message:
+    if cmd in ("chat", "console", "repl"):
+        if getattr(args, "message", None):
             task = orchestrator.execute_task(args.message)
             if args.json:
                 print(json.dumps(task.to_dict(), indent=2))
@@ -360,19 +429,82 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"Agent 911 ({task.interaction_mode}):\n{task.assistant_response}")
             return 0 if task.final_outcome == TaskOutcome.SUCCESS else 1
 
-        print("=== Agent 911 Interactive Conversational & Execution REPL ===")
-        print("Type any message to chat or any instruction to execute (or 'exit' to quit).")
+        print("=== Agent 911 Interactive Terminal Console ===")
+        print("Type any natural-language instruction or chat message, or use slash commands:")
+        print("  /help, /status, /caps, /tasks, /inspect <id>, /memory [q], /experiences [q],")
+        print("  /models, /providers, /distill <text>, /proposals, /improve <id>, /exit")
         while True:
             try:
-                user_msg = input("\nYou > ").strip()
+                user_msg = input("\nAgent911 > ").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\nGoodbye!")
                 break
             if not user_msg:
                 continue
-            if user_msg.lower() in ("exit", "quit", ":q"):
+            low_msg = user_msg.lower()
+            if low_msg in ("exit", "quit", ":q", "/exit", "/quit"):
                 print("Goodbye!")
                 break
+            if low_msg == "/help":
+                print("Console Commands:")
+                print("  /status              - Show workspace, model connectivity, and SQLite counts")
+                print("  /caps                - List registered capabilities and availability")
+                print("  /tasks               - List recent tasks in SQLite")
+                print("  /inspect <task_id>   - Show detailed task execution report")
+                print("  /memory [query]      - List or search persistent memories")
+                print("  /experiences [query] - List or search task experiences")
+                print("  /models              - List configured model profiles")
+                print("  /providers           - List configured model providers")
+                print("  /distill <text>      - Distill messy text into concrete build spec")
+                print("  /proposals           - Detect and list self-improvement proposals")
+                print("  /improve <prop_id>   - Run controlled self-improvement for a proposal")
+                print("  /exit                - Exit console")
+                continue
+            if low_msg == "/status":
+                main(["--workspace", str(config.workspace_path), "status"])
+                continue
+            if low_msg in ("/caps", "/capabilities"):
+                main(["--workspace", str(config.workspace_path), "capabilities"])
+                continue
+            if low_msg == "/tasks":
+                main(["--workspace", str(config.workspace_path), "tasks"])
+                continue
+            if low_msg.startswith("/inspect "):
+                tid = user_msg.split(None, 1)[1].strip()
+                main(["--workspace", str(config.workspace_path), "inspect", tid])
+                continue
+            if low_msg.startswith("/memory"):
+                parts = user_msg.split(None, 1)
+                cmd_args = ["--workspace", str(config.workspace_path), "memory"]
+                if len(parts) > 1:
+                    cmd_args.extend(["--query", parts[1].strip()])
+                main(cmd_args)
+                continue
+            if low_msg.startswith("/experiences"):
+                parts = user_msg.split(None, 1)
+                cmd_args = ["--workspace", str(config.workspace_path), "experiences"]
+                if len(parts) > 1:
+                    cmd_args.extend(["--query", parts[1].strip()])
+                main(cmd_args)
+                continue
+            if low_msg == "/models":
+                main(["--workspace", str(config.workspace_path), "models"])
+                continue
+            if low_msg == "/providers":
+                main(["--workspace", str(config.workspace_path), "providers"])
+                continue
+            if low_msg.startswith("/distill "):
+                raw_t = user_msg.split(None, 1)[1].strip()
+                main(["--workspace", str(config.workspace_path), "distill", raw_t])
+                continue
+            if low_msg == "/proposals":
+                main(["--workspace", str(config.workspace_path), "proposals", "--detect"])
+                continue
+            if low_msg.startswith("/improve "):
+                pid = user_msg.split(None, 1)[1].strip()
+                main(["--workspace", str(config.workspace_path), "self-improve", pid])
+                continue
+
             task = orchestrator.execute_task(user_msg)
             print(f"\nAgent 911 [{task.interaction_mode} | {task.final_outcome.value}] >\n{task.assistant_response}")
         return 0
@@ -535,7 +667,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 0
             if args.upsert_id:
                 existing = config.providers.get(args.upsert_id)
-                pdata: Dict[str, Any] = existing.to_dict() if existing else {
+                pdata: dict[str, Any] = existing.to_dict() if existing else {
                     "provider_id": args.upsert_id,
                     "name": args.name or args.upsert_id,
                     "adapter_type": args.adapter or "openai_compatible",
@@ -579,7 +711,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 0
             if args.upsert_id:
                 existing_m = config.models.get(args.upsert_id)
-                mdata: Dict[str, Any] = existing_m.to_dict() if existing_m else {
+                mdata: dict[str, Any] = existing_m.to_dict() if existing_m else {
                     "profile_id": args.upsert_id,
                     "name": args.name or args.upsert_id,
                     "provider_id": args.provider_id or "default",
@@ -645,7 +777,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if cmd == "model-select":
         try:
-            res: Dict[str, Any] = {}
+            res: dict[str, Any] = {}
             if args.profile_id:
                 res = orchestrator.select_active_model(
                     args.profile_id, set_as_default=args.set_default, save=True
@@ -709,10 +841,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"Run ID           : {run_rec['run_id']}")
                 print(f"Proposal ID      : {run_rec['proposal_id']}")
                 print(f"Disposition      : {run_rec['final_disposition']}")
-                print(f"Verification     : {run_rec['verification_status']}")
-                print(f"Live Run Testing : {run_rec['live_test_status']}")
-                print(f"Rolled Back      : {run_rec['rolled_back']}")
-                print(f"Notes            : {run_rec['notes']}")
+                print(f"Verification     : {'PASSED' if run_rec.get('verification_passed') else 'FAILED'}")
+                print(f"Live Run Testing : {'PASSED' if run_rec.get('live_test_passed') else 'FAILED'}")
+                print(f"Rolled Back      : {run_rec.get('rolled_back')}")
+                print(f"Actual Result    : {run_rec.get('actual_result')}")
             return 0 if run_rec["final_disposition"] == "VALIDATED_SUCCESS" else 1
         except Exception as exc:
             print(json.dumps({"error": str(exc)}, indent=2) if args.json else f"Error: {exc}", file=sys.stderr)

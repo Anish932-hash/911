@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agent911.capabilities.base import CapabilityContext
 from agent911.capabilities.registry import CapabilityRegistry
@@ -37,7 +37,7 @@ class SelfDiagnosticEngine:
         - Alternating between two unsuccessful corrections
         """
         failed_calls = [c for c in task.capability_calls if not c.success]
-        seen_sigs: Dict[tuple[str, str, str], int] = {}
+        seen_sigs: dict[tuple[str, str, str], int] = {}
         for fc in failed_calls:
             sig = (fc.step_id, fc.capability_id, str(fc.parameters))
             seen_sigs[sig] = seen_sigs.get(sig, 0) + 1
@@ -59,8 +59,8 @@ class SelfDiagnosticEngine:
     def diagnose_failure(
         cls,
         task: TaskState,
-        action: Optional[PlannedAction],
-        failed_result: Optional[CapabilityResult],
+        action: PlannedAction | None,
+        failed_result: CapabilityResult | None,
         error_record: ExecutionErrorRecord,
         context: CapabilityContext,
         repeated_loop_detected: bool = False,
@@ -82,13 +82,13 @@ class SelfDiagnosticEngine:
             else (error_record.capability_id or "unknown")
         )
 
-        confirmed_facts: List[str] = [
+        confirmed_facts: list[str] = [
             f"Confirmed: step '{error_record.step_id or 'task'}' invoking '{cap_id}' failed with error_type='{err_type}'."
         ]
-        likely_hypotheses: List[str] = []
-        eliminated_causes: List[str] = []
-        remaining_uncertainty: Optional[str] = None
-        diagnostic_action_taken: Optional[str] = None
+        likely_hypotheses: list[str] = []
+        eliminated_causes: list[str] = []
+        remaining_uncertainty: str | None = None
+        diagnostic_action_taken: str | None = None
         recommended_correction: str = "none"
         category = FailureRootCauseCategory.UNKNOWN_CAUSE
 
@@ -276,8 +276,8 @@ class CapabilityGapAnalyzer:
         error_message: str,
         registry: CapabilityRegistry,
         action_description: str = "",
-        action_parameters: Optional[Dict[str, Any]] = None,
-        config: Optional[AgentConfig] = None,
+        action_parameters: dict[str, Any] | None = None,
+        config: AgentConfig | None = None,
     ) -> CapabilityGapAnalysis:
         effective_cfg = config or getattr(registry, "config", None) or AgentConfig()
         return cls.analyze(
@@ -296,8 +296,8 @@ class CapabilityGapAnalyzer:
         task_instruction: str,
         registry: CapabilityRegistry,
         config: AgentConfig,
-        error_type: Optional[str] = None,
-        error_message: Optional[str] = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
     ) -> CapabilityGapAnalysis:
         avail = registry.get_availability(capability_id)
 

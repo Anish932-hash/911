@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.models import CapabilityResult, ExperienceRecord, TaskOutcome, new_id
@@ -30,7 +30,7 @@ class RecordExperienceCapability(Capability):
     }
     output_format = {"experience_id": "str", "task_id": "str", "outcome": "str"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         task_id = str(params.get("task_id") or context.task_id or new_id("task"))
         raw_outcome = str(params.get("outcome", TaskOutcome.UNVERIFIED.value)).upper()
         try:
@@ -44,7 +44,7 @@ class RecordExperienceCapability(Capability):
         lesson_confidence = str(params.get("lesson_confidence", "OBSERVED"))
         if outcome == TaskOutcome.SUCCESS:
             current_task_is_unfinished = task_id == context.task_id
-            def count(summary: Dict[str, Any], key: str) -> int:
+            def count(summary: dict[str, Any], key: str) -> int:
                 try:
                     return int(summary.get(key, 0))
                 except (TypeError, ValueError):
@@ -109,7 +109,7 @@ class RetrieveExperienceCapability(Capability):
     }
     output_format = {"count": "int", "experiences": "list[dict]"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         records = context.memory_store.retrieve_experiences(
             query=params.get("query"),
             task_id=params.get("task_id"),

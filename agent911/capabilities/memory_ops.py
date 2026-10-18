@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.models import CapabilityResult, MemoryCategory, MemoryConfidence
@@ -31,7 +31,7 @@ class StoreMemoryCapability(Capability):
     }
     output_format = {"memory_id": "str", "category": "str", "key": "str", "confidence": "str"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         raw_cat = str(params.get("category", MemoryCategory.FACTUAL.value)).upper()
         raw_conf = str(params.get("confidence", MemoryConfidence.OBSERVED.value)).upper()
         try:
@@ -76,7 +76,7 @@ class RetrieveMemoryCapability(Capability):
     }
     output_format = {"count": "int", "records": "list[dict]"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         query = params.get("query")
         cat_raw = params.get("category")
         key = params.get("key")
@@ -119,7 +119,7 @@ class UpdateMemoryCapability(Capability):
     }
     output_format = {"updated": "bool", "record": "dict"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         mem_id = str(params["memory_id"])
         conf_raw = params.get("confidence")
         conf = None

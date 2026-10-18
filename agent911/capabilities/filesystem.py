@@ -8,7 +8,7 @@ import re
 import stat
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.models import CapabilityResult
@@ -19,11 +19,11 @@ class WorkspaceBoundaryError(PermissionError):
 
 
 _PLACEHOLDER_PATTERNS = (
-    re.compile(r"<\s*(?:placeholder|your\s+code\s+here|insert\s+content\s+here)\s*>", re.I),
-    re.compile(r"\{\{\s*placeholder\s*\}\}", re.I),
-    re.compile(r"\b(?:TODO|TBD|FIXME)\s*:", re.I),
-    re.compile(r"\b(?:insert content here|implementation goes here|your code here)\b", re.I),
-    re.compile(r"\[\s*insert\s+.+?\s+here\s*\]", re.I),
+    re.compile(r"<\s*(?:placeholder|your\s+code\s+here|insert\s+content\s+here)\s*>", re.IGNORECASE),
+    re.compile(r"\{\{\s*placeholder\s*\}\}", re.IGNORECASE),
+    re.compile(r"\b(?:TODO|TBD|FIXME)\s*:", re.IGNORECASE),
+    re.compile(r"\b(?:insert content here|implementation goes here|your code here)\b", re.IGNORECASE),
+    re.compile(r"\[\s*insert\s+.+?\s+here\s*\]", re.IGNORECASE),
     re.compile(r"(?m)^\s*(?:\.{3}|…)\s*$"),
 )
 
@@ -41,6 +41,8 @@ def resolve_in_workspace(workspace_root: Path, requested_path: str) -> Path:
         raise ValueError("Path must be a non-empty string.")
     ws = workspace_root.resolve()
     raw = Path(requested_path)
+    if not raw.is_absolute() and "\\" in requested_path and os.name != "nt":
+        raw = Path(requested_path.replace("\\", "/"))
     candidate = raw.resolve() if raw.is_absolute() else (ws / raw).resolve()
     if not candidate.is_relative_to(ws):
         raise WorkspaceBoundaryError(
@@ -64,7 +66,7 @@ class ListDirectoryCapability(Capability):
     }
     output_format = {"entries": "list of file/directory metadata objects"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         rel_path = params.get("path", ".")
         recursive = bool(params.get("recursive", False))
         include_hidden = bool(params.get("include_hidden", False))
@@ -94,7 +96,7 @@ class ListDirectoryCapability(Capability):
                 error_type="NotADirectoryError",
             )
 
-        entries: List[Dict[str, Any]] = []
+        entries: list[dict[str, Any]] = []
         iterator = target.rglob("*") if recursive else target.iterdir()
         ws = context.workspace_path.resolve()
         for item in sorted(iterator, key=lambda p: str(p)):
@@ -106,7 +108,7 @@ class ListDirectoryCapability(Capability):
                 entries.append(
                     {
                         "name": item.name,
-                        "path": str(item.relative_to(ws)),
+                        "path": item.relative_to(ws).as_posix(),
                         "type": "directory" if item.is_dir() else "file",
                         "size_bytes": st.st_size if item.is_file() else 0,
                     }
@@ -117,7 +119,7 @@ class ListDirectoryCapability(Capability):
         return CapabilityResult(
             capability_id=self.identifier,
             success=True,
-            data={"path": str(target.relative_to(ws)), "count": len(entries), "entries": entries},
+            data={"path": target.relative_to(ws).as_posix(), "count": len(entries), "entries": entries},
         )
 
 
@@ -134,7 +136,7 @@ class ReadFileCapability(Capability):
     }
     output_format = {"path": "str", "content": "str", "size_bytes": "int"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         req_path = params["path"]
         max_bytes = int(params.get("max_bytes", 500_000))
         try:
@@ -171,7 +173,7 @@ class ReadFileCapability(Capability):
                 capability_id=self.identifier,
                 success=True,
                 data={
-                    "path": str(target.relative_to(ws)),
+                    "path": target.relative_to(ws).as_posix(),
                     "content": content,
                     "size_bytes": len(raw),
                     "truncated": truncated,
@@ -203,7 +205,7 @@ class WriteFileCapability(Capability):
     }
     output_format = {"path": "str", "bytes_written": "int", "sha256": "str"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         req_path = params["path"]
         content = params["content"]
         create_parents = bool(params.get("create_parents", False))
@@ -234,7 +236,7 @@ class WriteFileCapability(Capability):
             if create_parents:
                 target.parent.mkdir(parents=True, exist_ok=True)
             else:
-                rel_parent = str(target.parent.relative_to(ws))
+                rel_parent = target.parent.relative_to(ws).as_posix()
                 return CapabilityResult(
                     capability_id=self.identifier,
                     success=False,
@@ -259,7 +261,7 @@ class WriteFileCapability(Capability):
                 capability_id=self.identifier,
                 success=True,
                 data={
-                    "path": str(target.relative_to(ws)),
+                    "path": target.relative_to(ws).as_posix(),
                     "bytes_written": len(encoded),
                     "sha256": digest,
                 },
@@ -288,7 +290,7 @@ class UpdateFileCapability(Capability):
     }
     output_format = {"path": "str", "bytes_written": "int", "sha256": "str"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         req_path = params["path"]
         old_text = params.get("old_text")
         new_text = params.get("new_text")
@@ -359,7 +361,7 @@ class UpdateFileCapability(Capability):
                 capability_id=self.identifier,
                 success=True,
                 data={
-                    "path": str(target.relative_to(ws)),
+                    "path": target.relative_to(ws).as_posix(),
                     "bytes_written": len(encoded),
                     "sha256": hashlib.sha256(encoded).hexdigest(),
                 },
@@ -386,7 +388,7 @@ class MakeDirectoryCapability(Capability):
     }
     output_format = {"path": "str", "created": "bool"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         req_path = params["path"]
         parents = bool(params.get("parents", True))
         try:
@@ -413,7 +415,7 @@ class MakeDirectoryCapability(Capability):
             return CapabilityResult(
                 capability_id=self.identifier,
                 success=True,
-                data={"path": str(target.relative_to(ws)), "created": True},
+                data={"path": target.relative_to(ws).as_posix(), "created": True},
             )
         except OSError as exc:
             return CapabilityResult(
@@ -445,7 +447,7 @@ class StatFileCapability(Capability):
         "sha256": "optional str",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         req_path = params["path"]
         try:
             target = resolve_in_workspace(context.workspace_path, req_path)
@@ -476,7 +478,7 @@ class StatFileCapability(Capability):
                 capability_id=self.identifier,
                 success=True,
                 data={
-                    "path": str(target.relative_to(ws)),
+                    "path": target.relative_to(ws).as_posix(),
                     "exists": True,
                     "is_file": target.is_file(),
                     "is_dir": target.is_dir(),

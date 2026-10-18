@@ -1,0 +1,3 @@
+# Agent 911 core uses only the Python 3.11+ standard library (sqlite3, urllib, ast, subprocess, unittest).
+# Optional official provider SDKs (install if using Groq SDK routing):
+groq>=0.11.0

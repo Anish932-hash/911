@@ -8,7 +8,10 @@ from typing import Optional
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.capabilities.chat_ops import ChatRespondCapability
 from agent911.capabilities.command_execution import RunCommandCapability
-from agent911.capabilities.distill_ops import DistillInstructionCapability, InstructionDistiller
+from agent911.capabilities.distill_ops import (
+    DistillInstructionCapability,
+    InstructionDistiller,
+)
 from agent911.capabilities.experience_ops import (
     RecordExperienceCapability,
     RetrieveExperienceCapability,
@@ -46,7 +49,7 @@ from agent911.memory import PersistentMemoryStore
 
 def register_builtin_capabilities(
     registry: CapabilityRegistry,
-    memory_store: Optional[PersistentMemoryStore] = None,
+    memory_store: PersistentMemoryStore | None = None,
 ) -> None:
     """Register all built-in capabilities and reload persisted custom capabilities."""
     builtins = [
@@ -96,29 +99,29 @@ def register_builtin_capabilities(
 __all__ = [
     "Capability",
     "CapabilityContext",
-    "CapabilityRegistry",
     "CapabilityRegistrationError",
-    "WorkspaceBoundaryError",
-    "resolve_in_workspace",
-    "register_builtin_capabilities",
-    "ListDirectoryCapability",
-    "ReadFileCapability",
-    "WriteFileCapability",
-    "UpdateFileCapability",
-    "MakeDirectoryCapability",
-    "StatFileCapability",
-    "InspectProjectCapability",
-    "RunCommandCapability",
-    "RunTestsCapability",
-    "StoreMemoryCapability",
-    "RetrieveMemoryCapability",
-    "UpdateMemoryCapability",
-    "RecordExperienceCapability",
-    "RetrieveExperienceCapability",
-    "DiscoverCapabilitiesCapability",
+    "CapabilityRegistry",
     "CheckModelConnectivityCapability",
-    "QueryModelCapability",
     "DevelopCapability",
     "DevelopSkillCapability",
+    "DiscoverCapabilitiesCapability",
+    "InspectProjectCapability",
+    "ListDirectoryCapability",
+    "MakeDirectoryCapability",
+    "QueryModelCapability",
+    "ReadFileCapability",
+    "RecordExperienceCapability",
+    "RetrieveExperienceCapability",
+    "RetrieveMemoryCapability",
+    "RunCommandCapability",
+    "RunTestsCapability",
+    "StatFileCapability",
+    "StoreMemoryCapability",
+    "UpdateFileCapability",
+    "UpdateMemoryCapability",
     "WebSearchCapability",
+    "WorkspaceBoundaryError",
+    "WriteFileCapability",
+    "register_builtin_capabilities",
+    "resolve_in_workspace",
 ]

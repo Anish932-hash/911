@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from agent911.capabilities.base import Capability, CapabilityContext
 from agent911.config import AgentConfig
-from agent911.model_provider import ModelProviderError, ProviderConnectivityStatus
+from agent911.model_provider import ModelProviderError
 from agent911.models import CapabilityAvailability, CapabilityResult
 
 
@@ -29,7 +29,7 @@ class DiscoverCapabilitiesCapability(Capability):
     }
     output_format = {"count": "int", "capabilities": "list[dict]"}
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         query = params.get("query")
         only_available = bool(params.get("only_available", False))
         if query:
@@ -64,7 +64,7 @@ class CheckModelConnectivityCapability(Capability):
         "details": "str",
     }
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         report = context.model_interface.check_connectivity()
         # Note: checking connectivity is a diagnostic capability that succeeds in returning
         # the honest report, while recording whether the live provider was reached.
@@ -114,7 +114,7 @@ class QueryModelCapability(Capability):
             return CapabilityAvailability.REQUIRES_CONFIG
         return CapabilityAvailability.AVAILABLE
 
-    def execute(self, params: Dict[str, Any], context: CapabilityContext) -> CapabilityResult:
+    def execute(self, params: dict[str, Any], context: CapabilityContext) -> CapabilityResult:
         prompt = str(params["prompt"])
         sys_prompt = str(
             params.get(
