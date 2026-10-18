@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent 911 — Instruction-Driven AI Agent Chat & Operations Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-badge">
+          <span class="brand-pulse"></span>
+          <span>911</span>
+        </div>
+        <div>
+          <div class="brand-title-row">
+            <h1 class="brand-title">AGENT 911</h1>
+            <span class="brand-tag">AUTONOMOUS COMMAND DECK</span>
+          </div>
+          <p class="brand-subtitle">Conversational AI • Messy-to-Concrete Build Synthesizer • Verified Execution</p>
+        </div>
+      </div>
+
+      <div class="status-strip">
+        <div class="status-pill" id="connectivity-pill" title="Real AI Model Provider Connectivity">
+          <span class="dot" id="connectivity-dot"></span>
+          <span id="connectivity-label">Checking model...</span>
+        </div>
+        <div class="status-pill" id="caps-pill" title="Operational Capabilities">
+          <span id="caps-count-label">--/-- Capabilities</span>
+        </div>
+        <div class="status-pill" id="memory-pill" title="SQLite Persistent Memories & Experiences">
+          <span id="memory-count-label">0 Memories | 0 Experiences</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="new-chat-btn" type="button" title="Clear stream and start a fresh chat view">
+          + New Chat
+        </button>
+        <button class="btn btn-secondary btn-sm" id="open-config-btn" type="button">
+          ⚙ Runtime
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="main-layout">
+      <!-- Left Sidebar Navigation & Quick State -->
+      <aside class="sidebar">
+        <div class="sidebar-group-label">WORKSPACE SURFACES</div>
+        <nav class="nav-tabs" role="tablist">
+          <button class="nav-tab active" id="nav-chat" role="tab" aria-selected="true" aria-controls="tab-chat" data-tab="chat" type="button">
+            <span class="nav-icon">💬</span>
+            <span>Agent Chat</span>
+          </button>
+          <button class="nav-tab" id="nav-tasks" role="tab" aria-selected="false" aria-controls="tab-tasks" data-tab="tasks" type="button">
+            <span class="nav-icon">📜</span>
+          <span>Tasks</span>
+          </button>
+          <button class="nav-tab" id="nav-capabilities" role="tab" aria-selected="false" aria-controls="tab-capabilities" data-tab="capabilities" type="button">
+            <span class="nav-icon">🧩</span>
+          <span>Capabilities &amp; Skills</span>
+          </button>
+          <button class="nav-tab" id="nav-memory" role="tab" aria-selected="false" aria-controls="tab-memory" data-tab="memory" type="button">
+            <span class="nav-icon">🧠</span>
+            <span>Neural Vault</span>
+          </button>
+          <button class="nav-tab" id="nav-models" role="tab" aria-selected="false" aria-controls="tab-models" data-tab="models" type="button">
+            <span class="nav-icon">🛰️</span>
+            <span>Model Matrix</span>
+          </button>
+          <button class="nav-tab" id="nav-improvements" role="tab" aria-selected="false" aria-controls="tab-improvements" data-tab="improvements" type="button">
+            <span class="nav-icon">⚡</span>
+            <span>Self-Evolution</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <span>1-Click Launchers</span>
+          </div>
+          <div class="quick-prompts">
+            <button class="quick-prompt-btn" data-prompt="Hello! Who are you and what can you do?">
+              💬 Say Hello &amp; Capabilities
+            </button>
+            <button class="quick-prompt-btn" data-prompt="My name is Aryan and my role is AI Engineer">
+              🧠 Introduce Yourself (Memory)
+            </button>
+            <button class="quick-prompt-btn" data-prompt="What is my name and what do you remember about me?">
+              🔍 Recall Saved Context
+            </button>
+            <button class="quick-prompt-btn" data-prompt="uhh hey so like i'm trying to make a python script maybe call it price_calc or something in billing/ folder... basically it needs to calculate tax and apply discount, oh and also make a config json in billing/rates.json!!">
+              🧩 Build from Messy Writing
+            </button>
+            <button class="quick-prompt-btn" data-prompt="yo can u pls whip up a password generator tool in python that can generate password and check strength, and also make a test file for it and run unittest? idk just make it work">
+              🔐 Messy Build + Unit Tests
+            </button>
+            <button class="quick-prompt-btn" data-prompt="Inspect project structure, manifests, entry points, and tests">
+              📂 Inspect Workspace
+            </button>
+            <button class="quick-prompt-btn" data-prompt="Develop capability 'text.metrics' to count words, lines, and characters">
+              🛠️ Grow Skill: text.metrics
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section sidebar-tasks-mini">
+          <div class="sidebar-section-header">
+            <span>Session Activity</span>
+            <button class="btn-link" id="refresh-sidebar-btn" type="button">Sync</button>
+          </div>
+          <div id="recent-tasks-list" class="recent-tasks-list">
+            <div class="empty-hint">No sessions recorded yet.</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Content Area -->
+      <main class="content-area">
+        <!-- TAB 1: Chat & Task Console -->
+        <section class="tab-panel active" id="tab-chat" role="tabpanel" aria-labelledby="nav-chat">
+          <div class="chat-stream" id="chat-stream">
+            <div class="chat-msg assistant-msg welcome-hero-card">
+              <div class="msg-header">
+                <div class="agent-avatar-chip">
+                  <span class="avatar-dot"></span>
+                  <span class="msg-author">Agent 911</span>
+                </div>
+                <span class="msg-meta">Online • Conversational &amp; Autonomous Build Mode</span>
+              </div>
+              <div class="msg-body">
+                <div class="conversational-reply">
+                  <p>
+                    Welcome to the <strong>Agent 911 Command Deck</strong>. Talk to me naturally like a regular assistant, paste messy brainstorms to turn into working software, or instruct me to inspect, build, and test code in your workspace.
+                  </p>
+                </div>
+                <div class="hero-starter-grid">
+                  <button type="button" class="hero-starter-card quick-prompt-btn" data-prompt="Hello! Who are you and how do you work?">
+                    <span class="starter-badge">CHAT</span>
+                    <strong>Natural Conversation</strong>
+                    <span>Chat, ask math/coding questions, or teach me preferences saved in SQLite.</span>
+                  </button>
+                  <button type="button" class="hero-starter-card quick-prompt-btn" data-prompt="uhh hey so like i'm trying to make a python script maybe call it price_calc or something in billing/ folder... basically it needs to calculate tax and apply discount, oh and also make a config json in billing/rates.json!!">
+                    <span class="starter-badge starter-badge-amber">MESSY TO BUILD</span>
+                    <strong>Build from Messy Writing</strong>
+                    <span>Distill informal notes into concrete files, functions, &amp; configs automatically.</span>
+                  </button>
+                  <button type="button" class="hero-starter-card quick-prompt-btn" data-prompt="Inspect project structure, manifests, entry points, and tests">
+                    <span class="starter-badge starter-badge-emerald">WORKSPACE</span>
+                    <strong>Inspect &amp; Execute</strong>
+                    <span>Analyze project files, run tests, or grow new capabilities on the fly.</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="distill-preview-popover" class="distill-preview-popover hidden"></div>
+
+          <form class="chat-composer" id="chat-form">
+            <div class="composer-shell">
+              <textarea
+                id="chat-input"
+                rows="2"
+                placeholder="Chat naturally, paste messy build ideas, or give a workspace instruction..."
+                required
+              ></textarea>
+              <div class="composer-actions">
+                <div class="composer-left-tools">
+                  <button class="btn btn-ghost btn-sm" id="distill-preview-btn" type="button" title="Preview how Agent 911 distills your writing into a concrete build spec">
+                    ✨ Distill Preview
+                  </button>
+                  <span class="composer-hint" id="composer-status">Ready • Enter to send</span>
+                </div>
+                <button class="btn btn-primary" id="chat-submit-btn" type="submit">
+                  <span>Send</span>
+                  <span class="send-arrow">↗</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <!-- TAB 2: Execution History & Detailed Task Inspector -->
+        <section class="tab-panel" id="tab-tasks" role="tabpanel" aria-labelledby="nav-tasks">
+          <div class="panel-split">
+            <div class="panel-list-col">
+              <div class="panel-header">
+                <h2>Persisted Tasks</h2>
+                <button class="btn btn-secondary btn-sm" id="reload-tasks-btn" type="button">Reload</button>
+              </div>
+              <div id="tasks-table-container" class="scrollable-list"></div>
+            </div>
+            <div class="panel-detail-col">
+              <div class="panel-header">
+                <h2>Task Execution &amp; Evaluation Inspector</h2>
+              </div>
+              <div id="task-inspector-detail" class="scrollable-detail">
+                <div class="empty-hint">Select a task from the list to inspect its planned steps, intermediate outputs, Verification checks, Live Run Testing records, and execution logs.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: Capabilities Registry & Organic Capability Growth -->
+        <section class="tab-panel" id="tab-capabilities" role="tabpanel" aria-labelledby="nav-capabilities">
+          <div class="panel-split">
+            <div class="panel-list-col">
+              <div class="panel-header">
+                <h2>Registered Capabilities</h2>
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="filter-available-caps" />
+                  Only AVAILABLE
+                </label>
+              </div>
+              <div id="capabilities-list-container" class="scrollable-list"></div>
+            </div>
+            <div class="panel-detail-col">
+              <div class="panel-header">
+                <h2>Organic Capability Growth (<code>capability.develop</code>)</h2>
+              </div>
+              <div class="scrollable-detail">
+                <p class="section-desc">
+                  Describe what it should do and give an example input with the expected result. Agent 911 builds it
+                  in a test workspace, retries failures, and promotes it only after the checks pass.
+                </p>
+                <form id="grow-capability-form" class="stacked-form">
+                  <label>
+                    <span>Capability Identifier</span>
+                    <input type="text" id="grow-cap-id" placeholder="e.g. data.csv_to_json or hash.compute" required />
+                  </label>
+                  <label>
+                    <span>Capability Name</span>
+                    <input type="text" id="grow-cap-name" placeholder="e.g. CSV to JSON Converter" required />
+                  </label>
+                  <label>
+                    <span>Purpose / Behavior Specification</span>
+                    <textarea id="grow-cap-purpose" rows="3" placeholder="Describe behavior, inputs, outputs, and edge cases" required></textarea>
+                  </label>
+                  <label>
+                    <span>Test input (JSON)</span>
+                    <textarea
+                      id="grow-cap-test-input"
+                      rows="3"
+                      placeholder='{"text":"hello world"}'
+                      required
+                    ></textarea>
+                  </label>
+                  <label>
+                    <span>Expected result (JSON)</span>
+                    <textarea
+                      id="grow-cap-test-output"
+                      rows="3"
+                      placeholder='{"word_count":2}'
+                      required
+                    ></textarea>
+                  </label>
+                  <details class="advanced-code">
+                    <summary>Advanced: provide Python implementation</summary>
+                    <label>
+                      <span>Optional <code>execute(self, params, context)</code> body</span>
+                      <textarea
+                        id="grow-cap-code"
+                        rows="5"
+                        placeholder="Leave blank to have the configured model implement it."
+                      ></textarea>
+                    </label>
+                  </details>
+                  <button type="submit" class="btn btn-primary" id="grow-cap-submit">
+                    Build and test capability
+                  </button>
+                </form>
+                <div id="grow-capability-result" class="mt-16"></div>
+
+                <div class="skill-builder-card">
+                  <div>
+                    <h3>Create an agent skill</h3>
+                    <p class="section-desc">Describe the repeatable task. The configured model drafts a SKILL.md and checks its structure.</p>
+                  </div>
+                  <form id="create-skill-form" class="stacked-form">
+                    <label>
+                      <span>Skill goal</span>
+                      <textarea id="create-skill-spec" rows="4" placeholder="Create a skill that reviews app logs, checks errors against source and tests, and reports reproducible findings." required></textarea>
+                    </label>
+                    <button type="submit" class="btn btn-secondary" id="create-skill-submit">Draft and validate skill</button>
+                  </form>
+                  <div id="create-skill-result" class="mt-16" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: Persistent Memory & Experience -->
+        <section class="tab-panel" id="tab-memory" role="tabpanel" aria-labelledby="nav-memory">
+          <div class="panel-split">
+            <div class="panel-list-col">
+              <div class="panel-header">
+                <h2>SQLite Persistent Memory</h2>
+              </div>
+              <form id="memory-search-form" class="inline-search-bar">
+                <input type="text" id="memory-search-query" placeholder="Search memories by keyword..." />
+                <select id="memory-search-category">
+                  <option value="">All Categories</option>
+                  <option value="FACTUAL">FACTUAL</option>
+                  <option value="INSTRUCTION">INSTRUCTION</option>
+                  <option value="EPISODIC">EPISODIC</option>
+                  <option value="WORKING_STATE">WORKING_STATE</option>
+                </select>
+                <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+              </form>
+
+              <form id="memory-store-form" class="compact-box-form">
+                <h3>Store New Memory</h3>
+                <div class="form-row">
+                  <select id="store-mem-category">
+                    <option value="FACTUAL">FACTUAL</option>
+                    <option value="INSTRUCTION">INSTRUCTION</option>
+                    <option value="WORKING_STATE">WORKING_STATE</option>
+                  </select>
+                  <select id="store-mem-confidence">
+                    <option value="VERIFIED">VERIFIED</option>
+                    <option value="OBSERVED" selected>OBSERVED</option>
+                    <option value="ASSUMPTION">ASSUMPTION</option>
+                  </select>
+                  <input type="text" id="store-mem-key" placeholder="Key (e.g. project.db)" required />
+                </div>
+                <div class="form-row">
+                  <input type="text" id="store-mem-content" placeholder="Memory content..." required />
+                  <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </div>
+              </form>
+
+              <div id="memories-list-container" class="scrollable-list"></div>
+            </div>
+
+            <div class="panel-detail-col">
+              <div class="panel-header">
+                <h2>Recorded Task Experiences &amp; Learned Remedies</h2>
+              </div>
+              <form id="experience-search-form" class="inline-search-bar">
+                <input type="text" id="experience-search-query" placeholder="Search experiences, errors, or remedies..." />
+                <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+              </form>
+              <div id="experiences-list-container" class="scrollable-detail"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 5: Multi-Provider & Multi-Model Configuration & Connection Testing -->
+        <section class="tab-panel" id="tab-models" role="tabpanel" aria-labelledby="nav-models">
+          <div class="panel-split">
+            <div class="panel-list-col">
+              <div class="panel-header">
+                <h2>Configured Providers &amp; Credentials</h2>
+                <button class="btn btn-secondary btn-sm" id="reload-models-tab-btn" type="button">Reload</button>
+              </div>
+              <div class="scrollable-list">
+                <div id="providers-list-container" class="mb-16"></div>
+
+                <form id="provider-upsert-form" class="compact-box-form">
+                  <h3>Add / Update Provider</h3>
+                  <div class="form-row">
+                    <input type="text" id="prov-id" placeholder="Provider ID (e.g. openai_main)" required />
+                    <input type="text" id="prov-name" placeholder="Display Name" required />
+                  </div>
+                  <div class="form-row">
+                    <select id="prov-adapter">
+                      <option value="openai_compatible">openai_compatible</option>
+                      <option value="anthropic">anthropic</option>
+                      <option value="ollama">ollama</option>
+                      <option value="local_only">local_only</option>
+                      <option value="deterministic">deterministic</option>
+                    </select>
+                    <input type="text" id="prov-endpoint" placeholder="https://api.openai.com/v1/chat/completions" required />
+                  </div>
+                  <div class="form-row">
+                    <input type="text" id="prov-env" placeholder="Env var (e.g. OPENAI_API_KEY)" value="AGENT911_API_KEY" />
+                    <input type="password" id="prov-apikey" placeholder="Optional API Key (saved in 0600 vault)" autocomplete="off" />
+                    <button type="submit" class="btn btn-primary btn-sm">Save Provider</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="panel-detail-col">
+              <div class="panel-header">
+                <h2>Model Profiles, Active Selection &amp; Live Connection Test</h2>
+              </div>
+              <div class="scrollable-detail">
+                <div id="connection-test-banner" class="mb-16"></div>
+                <div id="models-list-container" class="mb-16"></div>
+
+                <form id="model-upsert-form" class="compact-box-form">
+                  <h3>Add / Update Model Profile</h3>
+                  <div class="form-row">
+                    <input type="text" id="mod-profile-id" placeholder="Profile ID (e.g. gpt4o-fast)" required />
+                    <input type="text" id="mod-name" placeholder="Display Name" required />
+                  </div>
+                  <div class="form-row">
+                    <input type="text" id="mod-provider-id" placeholder="Provider ID (e.g. default)" required />
+                    <input type="text" id="mod-model-id" placeholder="Provider Model ID (e.g. gpt-4o-mini)" required />
+                  </div>
+                  <div class="form-row">
+                    <input type="number" id="mod-ctx-window" placeholder="Context Window Tokens (optional)" min="256" />
+                    <input type="number" id="mod-temperature" placeholder="Temp (0.0-2.0)" step="0.05" min="0" max="2" value="0.1" />
+                    <input type="number" id="mod-timeout" placeholder="Timeout (s)" step="1" min="1" value="30" />
+                    <button type="submit" class="btn btn-primary btn-sm">Save Model</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 6: Adaptive Self-Improvement & Proposals -->
+        <section class="tab-panel" id="tab-improvements" role="tabpanel" aria-labelledby="nav-improvements">
+          <div class="panel-header">
+            <div>
+              <h2>Improvement Proposals &amp; Controlled Self-Improvement</h2>
+              <p class="panel-subtitle">
+                Detect recurring operational weaknesses from SQLite execution records, inspect prioritized
+                proposals, and run bounded self-improvement validated by Verification &amp; Live Run Testing
+                with automatic rollback.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary btn-sm" id="detect-proposals-btn" type="button">
+                Scan History &amp; Propose Improvements
+              </button>
+              <button class="btn btn-secondary btn-sm" id="refresh-proposals-btn" type="button">
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div id="self-improve-banner" class="config-status-banner" style="display: none; margin-bottom: 1rem;"></div>
+
+          <div class="split-grid">
+            <div class="card">
+              <h3>Prioritized Improvement Proposals</h3>
+              <div id="proposals-list" class="records-list"></div>
+            </div>
+            <div class="card">
+              <h3>Controlled Self-Improvement Run History</h3>
+              <div id="self-improve-runs-list" class="records-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Model & Runtime Configuration Modal -->
+  <div class="modal-backdrop hidden" id="config-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Model &amp; Runtime Configuration</h2>
+        <button class="btn-close" id="close-config-btn" type="button">&times;</button>
+      </div>
+      <form id="config-form" class="stacked-form">
+        <div class="config-status-banner" id="modal-connectivity-banner"></div>
+        <label>
+          <span>Model Provider</span>
+          <select id="cfg-provider">
+            <option value="openai_compatible">openai_compatible</option>
+            <option value="anthropic">anthropic</option>
+            <option value="ollama">ollama</option>
+            <option value="local_only">local_only</option>
+          </select>
+        </label>
+        <label>
+          <span>Model Identifier</span>
+          <input type="text" id="cfg-model-id" required />
+        </label>
+        <label>
+          <span>Model Endpoint URL</span>
+          <input type="text" id="cfg-endpoint" required />
+        </label>
+        <div class="form-grid-2">
+          <label>
+            <span>Timeout (seconds)</span>
+            <input type="number" step="0.5" min="1" id="cfg-timeout" required />
+          </label>
+          <label>
+            <span>Temperature (0.0 - 2.0)</span>
+            <input type="number" step="0.05" min="0" max="2" id="cfg-temperature" required />
+          </label>
+        </div>
+        <div class="form-grid-2">
+          <label>
+            <span>Max Recovery Attempts / Step</span>
+            <input type="number" min="0" max="10" id="cfg-max-recovery" required />
+          </label>
+          <label class="checkbox-block">
+            <input type="checkbox" id="cfg-local-fallback" checked />
+            <span>Allow Local Instruction Planner Fallback</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancel-config-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save &amp; Check Connectivity</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
